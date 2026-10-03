@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dji-assistant-sdk"
+version = "0.0.1"
+description = "Python SDK/CLI wrapper over DJI Assistant 2 via Windows UI Automation"
+requires-python = ">=3.10"
+dependencies = [
+    "pywinauto>=0.6.9",
+    "pywin32>=306",
+    "rich>=13.7",
+]
+
+[project.scripts]
+dji-assistant = "dji_assistant.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dji_assistant*"]
