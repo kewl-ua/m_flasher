@@ -34,7 +34,7 @@
 | Транспорт | [USB и DUML](./research/transport/usb-duml.md) | Descriptor/ABI, единичный коррелируемый ответ версии; firmware transfer по предоставленным captures | Production backend, Linux transport, полный контракт firmware session |
 | Телеметрия | [Батарея](./research/telemetry/battery.md) | Стабильное совпадение кандидата SOC при 35%; отдельный переход 34 -> 33% | Универсальный decoder и production API |
 | Native internals | [Checker, Core, Qt и dispatch](./research/native/analysis.md) | Конкретные статические связи на бинарных images с указанными hashes | Live-выбор всех веток и полная семантика полей |
-| Прошивка | [Linux updater и manifest](./research/firmware/linux-updater.md) | Читаемый XML; сопоставление и MD5 всех 22 компонентов | Подписи, аппаратный выбор, session/ACK/apply/recovery, Linux writer |
+| Прошивка | [Linux updater и manifest](./research/firmware/linux-updater.md) | XML/MD5 компонентов, captures Assistant; журнал внешнего Windows Refresh | Подписи, аппаратный выбор, полный контракт session/recovery, Linux transport и интеграция writer |
 | Windows automation | [Адресный ввод, picker и desktop](./research/windows/automation.md) | Локальные эксперименты и ограничения способов автоматизации | Безусловная автономность во всех состояниях приложения |
 
 ### Маршрут к Linux updater
@@ -55,6 +55,12 @@ config совпал с нашим ZIP побайтно, 22 firmware — по SHA
 расширенные `42`, terminal и post-reconnect `4F`; границы схемы и recovery
 остаются открытыми.
 
+[Первый самостоятельный Windows Refresh: проверка журнала](./research/firmware/direct-refresh-journal.md).
+2444 сохраненных кадра проверены по CRC; terminal и ответы версии
+подтверждают описанный результат 17.02.0501 -> 17.02.0501.
+Отчеты о файлах отделены от отсутствующих в JSONL data chunks.
+Внешняя реализация не интегрирована; Linux и смена версии не проверены.
+
 Подробный [каталог XML manifest и ZIP entries](./research/firmware/package-manifest.md)
 фиксирует все 22 компонента, config bounds, metadata и значения атрибутов,
 отдельно от неподтвержденной семантики native updater.
@@ -65,8 +71,9 @@ config совпал с нашим ZIP побайтно, 22 firmware — по SHA
    связи и оставшиеся границы статической трассировки.
 3. [USB transport](./research/transport/usb-duml.md): проверенные framing,
    адреса и ограничения конкретного Windows-драйвера.
-4. Следующая исследовательская граница: выбор компонентов и firmware-session
-   protocol, передача/ACK, verify/apply и recovery. Writer еще не реализован.
+4. Следующая исследовательская граница: raw capture внешнего writer,
+   проверка его реализации, выбор компонентов, полный firmware-session
+   contract и recovery. Linux transport и интеграция writer не проверены.
 
 ### Как читать степень подтверждения
 

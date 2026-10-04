@@ -27,7 +27,8 @@
   их MD5 совпали с manifest. Статически найдена цепочка IM*H container ->
   extraction -> Qt XML parser; поле +0xC8 задает slice длиной 24998 байт
   для этого config. Подписи, hardware selection и upgrade-center protocol
-  пока не подтверждены; Linux writer не реализован.
+  пока не подтверждены полностью; в этой рабочей копии независимый writer
+  не интегрирован, Linux transport на устройстве не проверен.
   Подробности: [XML manifest и native consumer](./docs/research/firmware/package-manifest.md).
 - Предоставленный полный USB capture независимо разобран offline:
   23 файла release **17.01.0516** переданы по DUML `00/2A` на адрес 48;
@@ -44,6 +45,12 @@
   Найдены разные длины расширенного `42` и ACK с медианой около 100 ms;
   универсальная схема статусов, ошибки и recovery еще не подтверждены.
   [Сравнение online/offline и управляющая последовательность](./docs/research/firmware/capture-offline-upgrade.md).
+- Проверен журнал внешней реализации `dji_duml`: **Windows Refresh
+  17.02.0501 -> 17.02.0501 за 205,026 s**. Все 2444 сохраненных кадра
+  прошли CRC; есть terminal `04 01 00`, ответы `4F` и затем `1F`
+  с целевой версией. Отчеты о 23 файлах совпали с нашим offline capture,
+  но data chunks в JSONL отсутствуют. Это не проверка Linux или смены версии.
+  [Доказательства, ограничения и следующие проверки](./docs/research/firmware/direct-refresh-journal.md).
 - **120 unit-тестов**; живые проверки описаны в [отчете о валидации](./docs/validation/coverage.md) отдельно от unit-тестов.
 
 Быстрый старт скрытого режима и ограничения:
@@ -96,7 +103,7 @@ pip install -e .
 | [USB и DUML: транспорт и запрос версии](./docs/research/transport/usb-duml.md) | На M4T проверен единичный запрос версии через USB. Это исследовательский пробник, не готовый backend SDK; драйверы и configuration не менялись. |
 | [Батарея: наблюдения и однократные DUML-запросы](./docs/research/telemetry/battery.md) | Есть стабильное совпадение кандидата SOC с Pilot 2 при 35% и совпадение при переходе 34 -> 33%. Универсальный decoder и production battery API не подтверждены. |
 | [Native-анализ: battery checker, Core, Qt и USB dispatch](./docs/research/native/analysis.md) | Адреса и layout привязаны к указанным неизмененным бинарным images. Статические связи не доказывают выбор ветки живым M4T; вызовы методов ради исследования не выполнялись. |
-| [Независимый Linux updater: пакет и manifest](./docs/research/firmware/linux-updater.md) | Цель утверждена, но Linux writer пока не реализован. XML прочитан, все 22 компонента сопоставлены и проверены по MD5; криптографические подписи и firmware-session protocol пока не проверены. |
+| [Независимый Linux updater: пакет и manifest](./docs/research/firmware/linux-updater.md) | XML/MD5 компонентов, captures Assistant и журнал внешнего Windows Refresh. Linux transport, интеграция writer, подписи и полный контракт session/recovery не проверены. |
 | [Windows: адресный ввод, file picker и отдельный desktop](./docs/research/windows/automation.md) | Экспериментальные способы автоматизации и их ограничения. Отрицательные и предварительные результаты сохранены; они не являются обещанием готовой автономности. |
 
 Исследовательские результаты не являются готовым USB/Linux backend. Новые live-запросы и операции записи требуют отдельного согласования; прежние однократные разрешения не переносятся на новые эксперименты.
