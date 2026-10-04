@@ -688,11 +688,108 @@ qt.conf и dbus_pc.json. Эти файлы относятся к порогам 
   FlySafe-предложение оставлено открытым, обновление базы не запускалось.
 
 Таким образом, read-only навигация и offline-select на отдельном desktop
-подтверждены на живом приложении. Это пока прототип, не публичный режим SDK:
-для интеграции еще нужны управление worker/IPC, восстановление после ошибок
-и явный жизненный цикл скрытого приложения. Изолированные firmware-write
+подтверждены на живом приложении. Изолированные firmware-write
 операции не проверялись и этим экспериментом не разрешались. Установленные
 файлы DJI не менялись, временный экспериментальный runner удален.
+
+### Экспериментальный API IsolatedAssistant
+
+`IsolatedAssistant` управляет отдельным Python worker и официальным
+Assistant на отдельном Windows desktop. Worker всегда использует
+`allow_physical_input=False, addressed_input=True`. Установленные файлы
+DJI не меняются, desktop пользователя не переключается. IPC использует
+ограниченные JSON-кадры через временный loopback socket с одноразовым
+случайным секретом; секрет передается worker через окружение, не аргументы.
+Произвольное исполнение Python/JS и команды записи прошивки не доступны.
+Пакет должен быть установлен в интерпретаторе, запускающем этот API.
+
+Перед `launch` необходимо штатно закрыть обычный Assistant.
+Worker проверяет отсутствие процессов DJI перед запуском и запрещает
+одновременную работу второго SDK worker через именованный mutex.
+Он не закрывает существующее приложение автоматически.
+
+```python
+from dji_assistant import IsolatedAssistant
+
+dji = IsolatedAssistant.launch(
+    r"C:\Program Files (x86)\DJI Product\DJI Assistant 2 (Enterprise Series)\DJI Assistant 2.exe",
+    title="DJI Assistant 2 (Enterprise Series)",
+)
+print("Recovery desktop:", dji.desktop_name)
+try:
+    dji.open_device("Matrice 4T", timeout=45)
+    print(dji.current(), dji.status())
+    dji.ignore_flysafe()  # Ignore only; does not update the database.
+    dji.select_package(r"C:\dev\fw_list\m4t\M4T_UAV_17.02.05.01_pro.zip")
+    print(dji.current())  # Returns to Firmware Update and waits for readable Current.
+    dji.quit_application()  # Guarded normal exit, only on an idle firmware page.
+finally:
+    dji.close()
+```
+
+`close()` только отключает канал и освобождает ресурсы контроллера:
+**Assistant остается на скрытом desktop**, если не вызван успешный
+`quit_application()`. Не используется принудительное завершение DJI.
+Для восстановления после отключения:
+
+```python
+recovered = IsolatedAssistant.attach(
+    saved_desktop_name,
+    title="DJI Assistant 2 (Enterprise Series)",
+)
+print(recovered.current(), recovered.status())
+recovered.quit_application()
+```
+
+При timeout/обрыве IPC результат команды считается неизвестным:
+канал больше не выполняет команды, автоматических повторов нет.
+Сначала вызовите `close()`, затем восстановите соединение через `attach`
+и проверьте состояние. Если worker еще заканчивает команду, это явно
+сообщается; новый worker не получает управление одновременно с ним.
+`attach` не запускает второй Assistant. Сохраните `desktop_name` до
+первых действий. При неудачном запуске имя desktop включено в ошибку;
+если приложение еще не появилось или desktop уже исчез, attach завершится
+ошибкой, а не запустит приложение заново.
+
+Поддержаны `open_device`, `current`, `status`, `ignore_flysafe`,
+`select_package`, `quit_application`, `close` и `attach`.
+CLI для этого режима пока нет. Terms of Use автоматически не принимаются;
+ручной показ скрытого desktop и взаимодействие с неизвестными диалогами
+не реализованы. Режим остается экспериментальным.
+
+Live-проверка самого API: отказ запуска при существующем обычном Assistant;
+изолированное открытие Matrice 4T, Current 17.02.0501 / idle,
+выбор официального ZIP, отключение worker без закрытия Assistant,
+повторное подключение к тому же desktop и штатный выход. Первый прогон
+выявил задержку Current после возврата со страницы Offline Upgrade;
+повторного выбора не было, приложение восстановлено через attach.
+После исправления весь сценарий прошел непрерывно, включая немедленное
+чтение Current после select_package. OpenInputDesktop опрашивался
+каждые 50 мс: все результаты Default, ошибок наблюдения не было.
+Обычный Assistant восстановлен с Current 17.02.0501 / idle;
+процессов isolated worker после завершения не осталось.
+Ни Start Upgrade, ни Start Update не нажимались.
+
+Дополнительная безопасная матрица 2026-10-04: два последовательных
+изолированных запуска с открытием устройства прошли за 8.47 и 10.15 с.
+В каждом проверены повторный open_device на уже открытом устройстве,
+Ignore и повторный Ignore без prompt, отказ второго worker при attach,
+отказ несуществующего файла с сохранением Current/idle, выбор ZIP,
+повторный выбор уже выбранного ZIP и отказ команды refresh в IPC.
+Первый цикл проверил close/idempotence/attach. Второй вызвал настоящий
+IPC timeout при ожидании несуществующего устройства: канал заблокировал
+последующие команды; close и attach восстановили чтение того же Assistant
+без повторения команды. Оба цикла завершены штатным quit; процессов DJI
+и worker после выхода не осталось. Все отсчеты OpenInputDesktop
+(каждые 50 мс) вернули Default. Обычный запуск восстановлен,
+Current 17.02.0501, idle. Запись прошивки не выполнялась.
+
+Проверка очистки выявила отдельное ограничение: после выхода всех процессов
+и закрытия SDK handles пустой desktop еще открывался по имени; его окон
+не было. Причина удержания Windows-объекта не установлена.
+`close()` гарантирует освобождение handles контроллера, но не немедленное
+исчезновение desktop-объекта из Windows. Многократные длительные циклы
+на накопление desktop-ресурсов пока не проверены.
 
 `flysafe_prompt()` обнаруживает известное предупреждение базы No-fly Zone.
 `confirm_flysafe(confirm=True)` требует отдельного явного разрешения; вызов
@@ -702,7 +799,7 @@ qt.conf и dbus_pc.json. Эти файлы относятся к порогам 
 
 Unit-тесты запускаются без устройства:
 `python -m unittest discover -s tests -v`.
-Текущий набор: **84 теста, все прошли**; также прошли compileall и diff --check
+Текущий набор: **106 тестов, все прошли**; также прошли compileall и diff --check
 после изменений запуска и закрытия.
 Покрыты парсер, офлайн-версия вне таблицы, состояния, ошибки, таймауты,
 однократность нажатий, ожидаемое устройство/Current, подтверждения,
