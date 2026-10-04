@@ -1,6 +1,6 @@
 # USB и DUML: транспорт и запрос версии
 
-[Главная и карта документации](../README.md)
+[Главная и карта документации](../../../README.md) | [Карта документации](../../README.md)
 
 На M4T проверен единичный запрос версии через USB. Это исследовательский пробник, не готовый backend SDK; драйверы и configuration не менялись.
 
@@ -183,4 +183,4 @@ Login, получение списка файлов, скачивание, за�
 
 ## Связанные материалы
 
-[Батарея: наблюдения и однократные DUML-запросы](./battery-telemetry.md) · [Native-анализ: battery checker, Core, Qt и USB dispatch](./native-analysis.md) · [Независимый Linux updater: пакет и manifest](./linux-updater.md)
+[Батарея: наблюдения и однократные DUML-запросы](../telemetry/battery.md) · [Native-анализ: battery checker, Core, Qt и USB dispatch](../native/analysis.md) · [Независимый Linux updater: пакет и manifest](../firmware/linux-updater.md)

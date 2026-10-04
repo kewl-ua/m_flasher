@@ -1,6 +1,6 @@
 # Windows SDK: чтение, операции, запуск и CLI
 
-[Главная и карта документации](../README.md)
+[Главная и карта документации](../../README.md) | [Карта документации](../README.md)
 
 Обычный режим DJI Assistant 2 через UIA. Запись требует явного подтверждения, ожидаемых модели и Current; неизвестный результат нельзя автоматически повторять.
 
@@ -266,4 +266,4 @@ Offline live-прогон 2026-10-04: SDK автоматически выбра�
 
 ## Связанные материалы
 
-[Прошивка M4T: журнал живых проверок](./firmware-validation.md) · [Windows: адресный ввод, file picker и отдельный desktop](./windows-experiments.md) · [Скрытый режим: IsolatedAssistant и CLI](./isolated-assistant.md) · [Валидация: unit-тесты и границы live-покрытия](./validation.md)
+[Прошивка M4T: журнал живых проверок](../validation/firmware-live.md) · [Windows: адресный ввод, file picker и отдельный desktop](../research/windows/automation.md) · [Скрытый режим: IsolatedAssistant и CLI](./isolated-assistant.md) · [Валидация: unit-тесты и границы live-покрытия](../validation/coverage.md)

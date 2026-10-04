@@ -1,6 +1,6 @@
 # Native-анализ: battery checker, Core, Qt и USB dispatch
 
-[Главная и карта документации](../README.md)
+[Главная и карта документации](../../../README.md) | [Карта документации](../../README.md)
 
 Адреса и layout привязаны к указанным неизмененным бинарным images. Статические связи не доказывают выбор ветки живым M4T; вызовы методов ради исследования не выполнялись.
 
@@ -485,4 +485,4 @@ read-only наблюдением и исследователем не вызыв
 
 ## Связанные материалы
 
-[Батарея: наблюдения и однократные DUML-запросы](./battery-telemetry.md) · [USB и DUML: транспорт и запрос версии](./usb-duml.md) · [Независимый Linux updater: пакет и manifest](./linux-updater.md)
+[Батарея: наблюдения и однократные DUML-запросы](../telemetry/battery.md) · [USB и DUML: транспорт и запрос версии](../transport/usb-duml.md) · [Независимый Linux updater: пакет и manifest](../firmware/linux-updater.md)

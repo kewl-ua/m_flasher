@@ -1,6 +1,6 @@
 # Скрытый режим: IsolatedAssistant и CLI
 
-[Главная и карта документации](../README.md)
+[Главная и карта документации](../../README.md) | [Карта документации](../README.md)
 
 Отдельный Windows desktop, worker и восстановление через attach. Запись прошивки в этом режиме не доступна; offline-select только выбирает пакет.
 
@@ -210,4 +210,4 @@ desktop-объект; после второго и третьего множес
 
 ## Связанные материалы
 
-[Windows: адресный ввод, file picker и отдельный desktop](./windows-experiments.md) · [Windows SDK: чтение, операции, запуск и CLI](./windows-sdk.md) · [Валидация: unit-тесты и границы live-покрытия](./validation.md)
+[Windows: адресный ввод, file picker и отдельный desktop](../research/windows/automation.md) · [Windows SDK: чтение, операции, запуск и CLI](./windows-sdk.md) · [Валидация: unit-тесты и границы live-покрытия](../validation/coverage.md)

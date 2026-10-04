@@ -1,6 +1,6 @@
 # Независимый Linux updater: пакет и manifest
 
-[Главная и карта документации](../README.md)
+[Главная и карта документации](../../../README.md) | [Карта документации](../../README.md)
 
 Цель утверждена, но Linux writer пока не реализован. XML прочитан, все 22 компонента сопоставлены и проверены по MD5; криптографические подписи и firmware-session protocol пока не проверены.
 
@@ -88,4 +88,4 @@ Production SDK и firmware writer не изменены, новых USB запр
 
 ## Связанные материалы
 
-[USB и DUML: транспорт и запрос версии](./usb-duml.md) · [Native-анализ: battery checker, Core, Qt и USB dispatch](./native-analysis.md) · [Прошивка M4T: журнал живых проверок](./firmware-validation.md)
+[USB и DUML: транспорт и запрос версии](../transport/usb-duml.md) · [Native-анализ: battery checker, Core, Qt и USB dispatch](../native/analysis.md) · [Прошивка M4T: журнал живых проверок](../../validation/firmware-live.md)

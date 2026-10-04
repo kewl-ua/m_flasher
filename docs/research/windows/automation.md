@@ -1,6 +1,6 @@
 # Windows: адресный ввод, file picker и отдельный desktop
 
-[Главная и карта документации](../README.md)
+[Главная и карта документации](../../../README.md) | [Карта документации](../../README.md)
 
 Экспериментальные способы автоматизации и их ограничения. Отрицательные и предварительные результаты сохранены; они не являются обещанием готовой автономности.
 
@@ -235,4 +235,4 @@ qt.conf и dbus_pc.json. Эти файлы относятся к порогам 
 
 ## Связанные материалы
 
-[Windows SDK: чтение, операции, запуск и CLI](./windows-sdk.md) · [Скрытый режим: IsolatedAssistant и CLI](./isolated-assistant.md)
+[Windows SDK: чтение, операции, запуск и CLI](../../guides/windows-sdk.md) · [Скрытый режим: IsolatedAssistant и CLI](../../guides/isolated-assistant.md)
