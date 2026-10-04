@@ -464,12 +464,545 @@ Constructor checker 0x71C6D0 устанавливает vtable 0x9624EC.
 пока не установлены. Factory создает объект, но не доказывает
 выполнение его Check; firmware workflow для проверки не запускался.
 
+Дополнительная проверка constructor базового `DJIBatteryPowerChecker`
+(0x612030, RTTI vtable 0x952B08) уточнила владельца флага:
+checker +8 хранит context, переданный factory из ее caller.
+Флаг +0x67 принадлежит этому context, а не непосредственно device object.
+Device object в getter достигается еще одним разыменованием context +8.
+Присваивание checker в context +0x4C (0x5BF370) переносит shared ownership;
+само присваивание не выполняет Check.
+
+В той же selection routine 0x5D6CC0 создается отдельный объект с RTTI
+`DJIFirmServiceAgent2` (constructor 0x59F9C0, vtable 0x94AE48).
+Это связывает найденные checkers с native firmware-service контекстом,
+но не определяет безопасный отдельный read workflow. Успех checker,
+наличие объекта и создание service agent нельзя считать доказательством
+живой battery telemetry. Точное имя флага пока не установлено;
+его constructor initialization подтверждена ниже, но последующие
+изменения не прослежены. Сервисы и операции прошивки не запускались.
+
+Последующее чтение конструктора контекста уточнило default флага:
+vtable 0x94D330 имеет RTTI `DJIUpgradeMgr`; в constructor участок
+0x5C0661 устанавливает этот vtable, а 0x5C0667 сохраняет device pointer
+в manager +8. В 0x5C070B адрес manager +0x64 помещается в ESI;
+0x5C0725 записывает туда DWORD 0x01000001. В little-endian это
+`01 00 00 01`, то есть байт **manager +0x67 изначально равен 1**.
+Так найдена запись, которую поиск отдельного byte store +0x67 не видел.
+Рядом, в 0x5C0732, записывается второй DWORD группы полей; названия
+каждого поля пока не восстановлены. Это default на стадии construction,
+не доказательство значения после последующих настроек и не подтверждение
+выполнения Check на подключенном M4T.
+
+Проверена также собственная Qt metaobject-таблица `DJIUpgradeMgr`
+(0xA1D654, method metadata 0x94CBE0, string records 0x94CA40).
+Она содержит шесть методов: signals `PushData`, `UpgradeOk`,
+`SubDeviceChanged` и slots `OnPushDownloadProgress`,
+`OnPushFlylimitNfzVersion`, `OnSubDeviceChanged`. Dispatch routine
+0x5BE720 и jump table 0x5BE7F8 подтверждают шесть entries;
+три slot entry ведут соответственно в 0x5D2080, 0x5D23F0 и
+0x5D5400. Последний является переходом к signal `SubDeviceChanged`
+(0x5BE5F0). Отдельного battery-read метода в этой собственной таблице
+нет. Это ограниченный результат: таблица не перечисляет обычные C++
+методы, унаследованные методы или другие интерфейсы и не доказывает
+отсутствие отдельного native read path. Методы не вызывались; Qt
+metadata сама по себе не означает доступность RPC.
+
+Прослежена передача context в один из выбранных firmware upgraders:
+после checker selection участок 0x5D9576 передает manager в constructor
+0x6BA5D0 (call 0x5D9584). Constructor устанавливает vtable 0x95C318,
+RTTI `DJIFirmRegisterUpgrader`, и передает тот же аргумент в base
+constructor 0x5E6A40 (call 0x6BA60D). Base vtable 0x94F268 имеет RTTI
+`DJIFirmwareUpgrader`; инструкция 0x5E6AE9 сохраняет manager pointer
+в upgrader +0x4C. Созданный upgrader сохраняется в manager +0x3C
+(0x5D9593). Это подтвержденная связь ownership/context, но не вызов
+battery Check и не подтверждение выбора такого upgrader для живого M4T.
+
+При поиске вызова нельзя приравнивать общий slot offset к имени метода:
+у battery checker vtable 0x9624EC entry +0x2C равен 0x71D300, тогда
+как у register upgrader vtable 0x95C318 тот же offset ведет в 0x6EC760.
+Последний читает два аргумента и вызывает Qt-функцию для полей
+upgrader +0x1B8/+0x1BC; это не найденная battery-check routine.
+Virtual-call candidates требуют доказать конкретный receiver и vtable;
+фактический caller battery Check в этом пути пока не установлен.
+Native constructors и методы исследователем не выполнялись.
+
+Прослежена и граница между числовым ответом и boolean результата Check:
+callback vtable 0x962978 имеет RTTI signature с одним byte argument.
+Entry +8 (0x71E610) передает этот байт в 0x71CA20. Там он расширяется
+со знаком (0x71CAE1) и сравнивается с unsigned byte checker +0x0C
+(0x71CD77–0x71CD81); predicate — значение >= порога. Default порог
+в base constructor 0x612050 равен 0x32 (50); отдельные selection
+ветки записывают другие значения. Это порог проверки, не процент,
+прочитанный из устройства.
+
+Перед завершением callback есть дополнительное условие:
+при исходном byte == 0 инструкция 0x71CED5 принудительно выбирает
+boolean true независимо от результата сравнения. Это наблюдаемая
+семантика native checker, не доказательство того, что 0 означает
+неизвестный заряд или отсутствие батареи. Вместе с пропуском Check
+по context flag она означает, что boolean success нельзя использовать
+как подтверждение измеренного SOC или как самостоятельный telemetry API.
+Для нового read API нужны коррелируемый raw response, проверки длины
+и результата, а затем независимая сверка показания Pilot 2.
+
 Следующая граница — подтвердить выбор этой ветки для модели и получить
 wire response в согласованном безопасном сценарии, затем сравнить
 валидный результат с Pilot 2. Вызов firmware workflow ради срабатывания
 battery checker, hooks, обход проверок и перебор native методов не нужны
 и не выполнялись. Установленный image не изменен; SDK/CLI пока без
 нового battery API.
+
+Read-only live memory проверка на обычном экране Firmware Update
+не подтвердила SOC в `DJIService.exe`. Pilot 2 до и после чтений
+подтверждал 55%, 54% и 52%; из baseline при 55% после 54% остались
+четыре уникальных адреса, но при 52% все отсеялись. Повторное чтение
+этих четырех адресов при подтвержденных 51% также не дало совпадений;
+адреса оставались доступны. При первой фильтрации 2210 прежних
+address/type candidates стали недоступны и были исключены, поэтому
+поиск по фиксированным адресам не покрывает перемещающиеся значения.
+
+Дополнительно учтена ASLR: loaded image base получен из процесса,
+а relocated entry battery checker vtable +0x2C проверен чтением.
+В 10 571 776 прочитанных байтах committed private RW memory того же
+`DJIService.exe` не найдены aligned pointer candidates для трех
+проверенных vtables: `DJIUpgradeMgr`, `DJIBatteryPowerChecker1` и
+base `DJIBatteryPowerChecker`. Ошибок чтения этого scan не было.
+Это ограниченный отрицательный результат по одному процессу и типам
+памяти, не доказательство отсутствия объектов или SOC во всем Assistant.
+`DJIServiceCore.exe` и browser processes этим scan не проверялись.
+Совпадения чисел не признаны telemetry; raw memory dumps не сохранялись,
+память не изменялась и native методы не вызывались.
+
+Проверка соседнего `DJIServiceCore.exe` уточнила границы поиска:
+в текущем process tree он является дочерним процессом `DJIService.exe`,
+но это отдельный PE32 Go binary, а не второй экземпляр C++ image.
+SHA256 core image:
+`831051acc24af67f07f3a2d6e748bf2dd0a6e2a8078df2e2937a242d40e4ec24`.
+Pointer-based Go build-info сообщает `go1.14.1`. Таблица pclntab
+с magic 0xFFFFFFFB содержит 6611 function entries; проверены порядок
+entry addresses, соответствие entry в function records и UTF-8 имена.
+Среди них присутствуют `runtime.main`, `main.main`, device detectors,
+`PCWSDevice`, protocol и device-identification functions. Ни одно
+function name этой таблицы не содержит `battery` без учета регистра.
+Это результат поиска имен, не доказательство отсутствия battery data
+в общих обработчиках или памяти. Адреса C++ vtables из `DJIService.exe`
+нельзя переносить в core process; его SOC scan не выполнялся.
+Роль core на живом battery path и источник актуального SOC остаются
+неподтвержденными. Новый процентный baseline пока не снимается.
+
+Дальнейшее static чтение core подтвердило общий путь передачи decoded
+V1 data: `protocol.(*Mgr).v1Decode` (0x680460) вызывает
+`protocol/v1.(*Decoder).StreamDecode` в 0x6804A0, получает результат,
+затем под `sync.(*RWMutex).RLock` (0x680529) обходит список из manager
++0x1C/+0x20. В 0x68058B вызывается `runtime.selectnbsend`; завершение
+освобождает read lock через `RUnlock` в 0x680628. Все четыре call target
+сверены с Go function metadata и instruction bytes. Это общий
+nonblocking channel delivery, не специализированный SOC decoder.
+Получатели этих channels и наличие battery payload на живом пути пока
+не установлены; вызов `selectnbsend` не означает отправку USB-команды.
+Исследование выполнено без исполнения core методов.
+
+Уточнены подписчики этого общего потока. `Mgr.AddV1Observer`
+(0x680A10) создает channel с capacity 0x400 (1024) через
+`runtime.makechan` в 0x680A3A и добавляет его в тот же manager list
++0x1C/+0x20 под write lock. Disassembly подтвердил регистрацию из
+`CmdIo.SendV1WithTimeout` (call 0x68A668) и worker
+`CmdIo.RequestV1PushWithChan2.func1` (call 0x68ACA2).
+Worker использует `runtime.selectgo`, проверяет byte поля decoded
+message +7/+8/+9 и передает подходящее сообщение в следующий channel
+через второй select; имена этих полей подтверждены ниже.
+На рассмотренных exit paths вызывается `RemoveV1Observer`.
+
+Подтвержден один конкретный application consumer:
+`module/log_export.getFileImpl.func2` вызывает
+`CmdIo.RequestV1PushWithCmdAndCancel` в 0x6A7783; этот wrapper вызывает
+`RequestV1PushWithChan2` в 0x68AA09, который запускает worker через
+`runtime.newproc` в 0x68A3CA. Это static связь с log-export workflow,
+не найденный battery consumer и не доказательство запуска этого пути
+на текущем экране. Проверены 11 call anchors по instruction bytes
+и Go function names, а также аргумент capacity channel.
+Log export, подписки и отправка команд исследователем не запускались.
+
+Go type metadata уточнила фильтр worker: observer channel type
+0x6D52E0 содержит pointers на message struct 0x6FE000 (size 24).
+Его поля — embedded `ProtocolHeader` в +0 и `Body` в +12.
+Header type 0x71EB20 содержит девять именованных полей;
++7 = `CmdType`, +8 = `CmdSet`, +9 = `CmdId`. Worker принимает
+только `CmdType == 0` (0x68ADD0/0x68ADD4), затем сравнивает
+`CmdSet` и `CmdId` с аргументами подписки (0x68ADE4/0x68ADF5).
+Смещения относятся к decoded message, не raw USB payload и не SOC.
+В StreamDecode wire bytes +9/+10 записываются в decoder header
++0x10/+0x11 (0x67F8F9/0x67F8FD и 0x67F911/0x67F915);
+manager переносит соответствующую часть header в message +8/+9.
+Проверены channel element type chain, все девять header offsets
+и восемь instruction anchors. Семантика имени `CmdType` не дает
+основания называть значение 0 измерением батареи или безопасной
+командой: это общий фильтр заголовка, а Body еще требует отдельного
+decoder и подтверждения применимости к M4T.
+
+Чтение log-export callback уточнило назначение его Body:
+переданный descriptor 0x6F8A00 является Go pointer type, не interface
+method table; его element struct 0x7139E0 содержит `Code` (+0),
+`Length` (+4), `LengthRemained` (+8), `OffsetAdd` (+12), `Data` (+16).
+Callback 0x6A73B0 проверяет concrete type в 0x6A7466/0x6A746C,
+передает Data slice в `bytes.(*Buffer).Write` (call 0x6A74A6),
+накапливает OffsetAdd и читает LengthRemained. Это подтверждает
+сборку порций file data в данном callback, не получение SOC.
+Никакие файлы этим исследованием не скачивались.
+
+Wrapper вызывает `gen/v1g.GetCmdInfo` в 0x68A99D, то есть получает
+command metadata через отдельный lookup, а не из первых слов
+переданного Go type descriptor. Нельзя трактовать эти слова как
+номер команды. Проверены пять named field offsets, pointer element,
+callback instruction anchors и два call target по Go metadata.
+
+Продолжение чтения method metadata связало pointer type 0x6F8A00
+с `module/log_export.(*PushFileReq).GetCmdInfo` (0x699A60).
+Это имя concrete type, используемого callback; прежнее описание
+«file response» обозначало его роль в потоке, не имя Go-типа.
+Uncommon metadata содержит два метода; relative method entry
+0x298A60 соответствует 0x699A60 и проверенному Go function name.
+Его command-info struct 0x708AA0 имеет `CmdSetInfo` (+0),
+`CmdId` (+4), `Type` (+5). Отдельный CmdSetInfo struct 0x708B20
+имеет `Version` (+0), `CmdSet` (+2), `EncType` (+3).
+Инструкция 0x699A9D записывает packed bytes `01 00 00 03`,
+то есть Version 1, CmdSet 0, EncType 3; 0x699AB3 задает CmdId 0x1F.
+Wrapper читает именно CmdSetInfo +2 и CmdId +4
+(0x68A9EB/0x68A9EF), затем передает их push-фильтру.
+Таким образом, конкретная найденная log-file подписка фильтрует
+**00/1F**, не ранее исследованные battery candidates 00/78 или 0D/02.
+Это не новый live запрос, не доказательство текущей активности
+подписки и не разрешение запускать log-export workflow.
+Проверены layout и scalar types metadata, связанный method record
+и десять instruction anchors на неизмененном core image.
+
+Отдельно проверена state-команда core, чтобы не принимать общее имя
+`GetDeviceState` за battery telemetry. В Go function table найдено
+15 application entries с именем, заканчивающимся на `.GetCmdInfo`,
+включая generic lookup; среди этих имен нет battery/OSD команды.
+Это ограниченный перечень именованных методов, не всех обработчиков.
+`GetDeviceStateReq` (0x68B300) и `GetDeviceStateRsp` (0x68B380)
+задают command metadata **00/0C**. Pointer type 0x6EABE0 связан
+единственным method record с response GetCmdInfo; element struct
+0x71CF40 содержит `RetCode`, `MinorVersion`, `MajorVersion`,
+`IsLoaderMode`, `IsNoRepower`, `Reserve1`, `Reserve2`, `Reserve3`.
+Named SOC field в этой структуре нет. Reserve fields не декодировались
+как заряд; их смысл и применимость ответа к M4T не установлены.
+Проверены method binding, восемь field offsets и шесть instruction
+anchors на неизмененном core image. Команда 00/0C не отправлялась.
+
+В C++ service найдена отдельная push-ветка, не связанная с upgrade
+checker. Qt metaobject 0x968B50 использует string table 0x968B68,
+data table 0x968F48 и static metacall 0x7A0920.
+Class name в таблице — `DJIControllerCommandSet`; все 12 собственных
+методов имеют signal flags 0x6. Signal index 5 —
+`PushSmartBatteryStatus(SMART_BATTERY_STATUS)`, index 4 —
+`PushOsdGeneralData(OSD_GENERAL_DATA)`. Это не RC signal
+`PushBatteryInfo(PUSH_RC_BATTERY_INFO)`, принадлежащий отдельной
+таблице `DJIRcCommandSet`.
+
+Jump-table entry 5 в static metacall ведет к 0x7A0991; call
+0x7A099A вызывает signal wrapper 0x7A0D80. Wrapper передает
+metaobject 0x968B50 и signal index 5. Помимо metacall найден
+и disassembly-проверен call 0x7851D7 из обработчика 0x785080.
+Он берет data pointer/length из входного объекта +0x40/+0x44,
+проверяет минимум 0x1E (30) байт в 0x7851A9, копирует первые
+30 байт в локальную структуру и передает ее signal wrapper.
+Две dispatch tables выбирают эту ветку при значении 0x51
+16-битного поля входного объекта +0x34. Пока связь этого поля
+с wire CmdId не проверена, 0x51 не публикуется как номер
+батарейной команды. SOC offset, устройство-источник, связь
+с M4T и live активность сигнала также не установлены.
+Проверены Qt method/type names, jump-table mapping, шесть
+instruction anchors и неизменность image hash. Обработчик
+не запускался, память процесса и USB в этой проверке не читались.
+
+Продолжение проверки push-ветки подтвердило RTTI
+`DJIControllerCommandSet` для vtable 0x96822C; slot +0x2C
+указывает на обработчик 0x785080. Battery branch копирует payload
+частями 16 + 8 + 4 + 2 байта без извлечения отдельного SOC-поля.
+Единственная absolute reference на signal wrapper 0x7A0D80
+в этом executable находится в 0x7A0ABB: disassembly показывает
+сравнение адреса метода и возврат signal index 5, а не подключение
+потребителя. Тексты `PushSmartBatteryStatus` и
+`SMART_BATTERY_STATUS` встречаются по одному разу, в уже разобранной
+Qt таблице. Прямой именованный/адресный consumer этим поиском
+не найден; динамические Qt connections и другие модули не исключены.
+Constructor устанавливает controller vtable в 0x77FF2D и записывает
+3 в private object +0x28 (0x77FF37); значение пока не трактуется
+как wire CmdSet без проверки базового маршрутизатора.
+Проверены RTTI/slot, число absolute/string references и восемь
+instruction anchors. Размер структуры не задает SOC offset;
+из этих данных нельзя выводить процент заряда или активность M4T.
+
+При обсуждении самостоятельного DUML-запроса пользователь выбрал
+сначала статически проверить маршрут/формат 0D/02, без отправки.
+Повторное чтение getter 0x79E4C0 и decoder 0x79B040 подтвердило
+четырехбайтовый request copy, command ID 02, result-prefix length 1
+и guard prefix +30 перед success callback. Caller в 0x71D914
+получает context из checker +8, затем device из context +8;
+в 0x71D91E передает device +0xC8 в constructor command set.
+Этот путь использует device-scoped объект, но не устанавливает,
+какой физический компонент M4T принимает receiver 0B.
+Назначение четырех request bytes и связь device +0xC8 с текущим
+USB transport еще требуют проверки. Подтвержденная serialization
+не означает совместимость или отсутствие побочных эффектов на M4T.
+Не выполнялись USB open/claim/read/write, новый query или перебор
+адресов/команд. До live проверки ответ нельзя выдавать как заряд;
+нужны CRC, correlation по sequence/адресам/команде, нулевой result,
+достаточная длина и независимое сравнение с Pilot 2.
+
+Статическая трассировка device +0xC8 уточнила границу транспорта.
+Battery constructor 0x79D620 берет argument +0x30, передает его
+базовому constructor 0x74AB70, который копирует pointer/control-block
+pair в command-set +0x18/+0x1C с увеличением reference count.
+Следовательно, device +0xC8 здесь передается как адрес пары владения,
+не как готовый USB handle или номер endpoint.
+Dispatch 0x74B0E0 сначала вызывает packer slot +4, затем использует
+сохраненный pointer +0x18: ветки вызывают 0x73C380 (0x74B1DC)
+или 0x73FAE0 (0x74B269). Во втором пути читается вложенный pointer
++0x160; его virtual slot +0x10 вызывается как boolean gate.
+Concrete type этого вложенного объекта и связь с MI04 не установлены;
+наличие уровня dispatch не доказывает USB transport.
+Проверены image hash и 19 instruction anchors. `tshark` не запускался,
+захват и DUML отправка не выполнялись.
+
+Далее найдены и disassembly-проверены два concrete пути установки
+вложенного channel pointer +0x160. В 0x73ED93 вызывается constructor
+0x748210, устанавливающий vtable 0x966E48; RTTI определяет
+`DJISerialDeviceIO`. Pointer на объект allocation +0x10 сохраняется
+в +0x160 в 0x73EE83. Другой путь вызывает constructor 0x742600
+(0x73F194), устанавливающий vtable 0x966894 с RTTI
+`DJIUSBDeviceIO`; pointer allocation +0x10 сохраняется в +0x160
+в 0x73F258. В обоих случаях соседнее +0x164 хранит control block.
+Таким образом, ранее найденный dispatch допускает serial и USB
+каналы, а не только один предполагаемый USB transport.
+USB vtable slot +0x10 ведет в 0x743AF0, возвращающий boolean
+из byte +0x28: это readiness gate, не отправка пакета.
+Проверены две RTTI identities, constructor/install цепочки и восемь
+instruction anchors на неизмененном image. Не установлено, какая
+ветка выбрана живым device M4T, либо какие endpoints использует
+этот USB object. Наличие `DJIUSBDeviceIO` не подтверждает MI04.
+Capture, чтение process memory и DUML send не выполнялись.
+
+Статический open-путь `DJIUSBDeviceIO` (0x743B80) разрешен до
+импортов `libusb0_dji.dll`: `usb_open`, `usb_set_configuration`,
+`usb_claim_interface`, `usb_bulk_setup_async`. Helper 0x74A020
+получает 16-битный lookup key из native enumeration object +0x416
+и возвращает тройку interface / IN endpoint / OUT endpoint.
+Initializer в 0x40810A--0x4081CC создает для key 0x0020 запись
+**4 / 85 / 04**; fallback helper задает ту же тройку.
+Это совпадает с ранее прочитанным descriptor MI04 с bulk OUT 04 /
+IN 85. Идентичность поля +0x416 именно product ID в ABI этой
+32-bit DLL отдельно не проверена; key 0020 не подменяет live выбор.
+
+Open-путь использует тройку при claim (0x7446AD), затем передает
+OUT endpoint в bulk setup (0x7446CC, context object +0x3C)
+и IN endpoint (0x7446E9, context +0x40). Он также содержит
+set_configuration(1); этот native метод не является чистым
+read-only наблюдением и исследователем не вызывался.
+Проверены PE import identities, map initialization, fallback
+и 19 instruction anchors на неизмененном image. Это подтверждает
+конкретный статический USB путь, но не live выбранный channel,
+поддержку запроса 0D/02 либо семантику его ответа на M4T.
+Новых capture, USB transfers и изменений configuration не было.
+
+### Однократный экспериментальный battery DUML query
+
+2026-10-04 пользователь отдельно разрешил один запрос 0D/02,
+без повторов/перебора, подтвердив ground state, выключенные моторы
+и отсутствие обновления. Перед запросом Pilot 2 показывал 38%;
+последующий пользовательский tick — 37%, поэтому стабильное
+контрольное значение за весь интервал не заявляется.
+DJI-процессы были закрыты. Session-only probe проверил fingerprint
+64-bit DLL, ABI, host metadata mapping к MI04, configuration
+descriptor и endpoints 04/85. Offline CRC vectors, fragmented
+stream parsing и request shape прошли до USB вызовов.
+
+Отправлен один 17-байтовый пакет: 2A -> 0B, command 0D/02,
+payload `00 00 01 05`, sequence 0x9EB5. Bulk write вернул 17.
+За ограниченное пятисекундное ожидание прочитано 204410 байт,
+распознано 3368 CRC-valid пакетов вне точного response key
+(обратные адреса, тот же sequence, flags C0, command 0D/02).
+Совпадающего ответа не найдено. Полнота stream decoding не
+заявляется; это не доказательство отсутствия поддержки команды,
+не отказ устройства с известным error code и не измерение SOC.
+Raw traffic/payloads не сохранялись; только итоговые счетчики.
+
+Последующая статическая проверка выявила ограничение нашего response
+filter: требование точного flags C0 было слишком строгим.
+Serializer 0x79FCE0 очищает header, формирует bits 5/6 из internal
+command type, отдельно устанавливает bit 7 для type 4
+(0x79FDB1--0x79FDC3) и low nibble из object +0x30
+(0x79FDD2--0x79FDDB). Decoder 0x79FF90 отдельно извлекает
+bits 5/6 (0x7A0067/0x7A006D) и low nibble (0x7A007F).
+Поэтому C0 нельзя считать универсальным response byte на основании
+одного ранее полученного version ответа. Предыдущий результат означает
+только отсутствие совпадения с точным C0 filter; возможный ответ
+с другими flags не исключен. Raw stream уже не сохранен, так что
+ретроспективно проверить его нельзя.
+
+Session probe исправлен: envelope correlation сохраняет reversed
+addresses, sequence, command и response bit 7, но не требует полного
+совпадения flags. Low nibble сохраняется отдельно; при ненулевом
+значении payload не интерпретируется как plain result/SOC.
+Offline проверки CRC-valid искусственных вариантов 80/A0/C0/E0/83
+и отрицательных случаев request bit, других адресов, sequence и
+command прошли. Это тест probe, не live подтверждение поддержки
+всех вариантов M4T и не полная реконструкция native matcher.
+Новой отправки не было; назначение receiver 0B остается непроверенным.
+
+Повторной отправки, reset, set_configuration, set_altinterface,
+вызова native Assistant методов или firmware операций не было.
+Interface освобожден, native handle закрыт; последующая Windows
+проверка показала MI04 status OK и отсутствие DJI-процессов.
+Эксперимент не подтвердил battery query для M4T; SDK decoder
+и публичный CLI не изменены.
+
+### Ответ battery query с исправленным фильтром: контроль 35%
+
+Пользователь отдельно разрешил одну новую отправку той же команды
+при прежних ground/motors-off/no-upgrade условиях. Первый record
+сохранен; новый session record и exclusive creation gate исключают
+автоматическое повторение этой попытки. Pilot 2 показывал **35%**
+до запроса и, по последующему подтверждению пользователя, после него.
+Fingerprint/ABI, отсутствие DJI-процессов, host mapping MI04 и
+configuration descriptor проверены заново; offline tests прошли.
+
+Один запрос 2A -> 0B, 0D/02, payload `00 00 01 05`,
+sequence **0x0D8C** полностью отправлен (bulk write 17).
+Получен CRC8/CRC16-valid ответ с обратными адресами, тем же sequence
+и командой; **flags 80**, encoding nibble 0, result byte **00**,
+payload length **45**. Кандидат raw payload offset 21 равен **35**,
+что совпало со стабильным независимым показанием Pilot 2.
+Это первая положительная single-point проверка найденного кандидата
+на данном M4T. Она не доказывает полную схему ответа, универсальность
+SOC offset или назначение всех остальных полей/receiver 0B.
+Flags 80 также подтверждают, что прежний exact C0 filter был
+непригоден для этого ответа; наличие ответа в первой попытке
+ретроспективно установить нельзя.
+
+До остановки чтения получено 199421 байт; распознано 3277 других
+CRC-valid пакетов и один пакет 0D/02, совпавший с sequence.
+Raw traffic и полный payload не сохранялись, только итоговые
+счетчики и кандидат. Interface освобожден, handle закрыт,
+Windows MI04 status OK; DJI-процессы отсутствовали после обмена.
+Повторной отправки в этой попытке, смены configuration/altinterface,
+reset или firmware действий не было. Production SDK/CLI не изменен;
+перед decoder нужна независимая проверка при другом естественном
+показании заряда с отдельным разрешением на новый запрос.
+
+Следующая отдельно разрешенная однократная проверка имела контроль
+Pilot 2 **34% до отправки**. Новый record сохранен отдельно, без
+перезаписи предыдущих попыток. Fingerprint/ABI, closed-process guard,
+host mapping MI04, descriptor и offline tests снова прошли.
+Один запрос с sequence **0xA0ED** полностью отправлен (17 байт);
+CRC-valid коррелируемый ответ имеет flags 80, encoding nibble 0,
+result 00 и payload 45 байт. Raw offset 21 равен **33**.
+После запроса пользователь подтвердил, что Pilot 2 переключился
+на **33%**. Это согласуется с естественным изменением заряда, но
+не является второй стабильной before/after точкой: точное время
+перехода относительно ответа не установлено.
+Прочитано 39715 байт, распознано 654 других CRC-valid пакета
+и один совпадающий 0D/02. Interface освобожден, handle закрыт,
+MI04 status OK, DJI-процессы отсутствовали. Повторов и изменений
+configuration не было. Теперь имеются стабильное совпадение при 35%
+и совпадение с последующим контролем 33% во время перехода 34 -> 33;
+это не основание заявлять точность/универсальность SOC decoder.
+
+### Цель: независимый Linux updater из имеющегося пакета
+
+Пользователь определил следующий deliverable: прошивка M4T из
+имеющихся firmware files на Linux без установленного Assistant,
+а не перенос Windows UI automation. Linux writer пока не реализован.
+Разрешения на предыдущие battery queries не распространяются
+на запуск нового firmware workflow или запись firmware по USB.
+
+Первый offline inspection существующего
+`M4T_UAV_17.02.05.01_pro.zip` установил 23 entries:
+22 component `.fw.sig` и один `.cfg.sig`, всего 665796192
+байта содержимого. Все 23 entry начинаются magic `IM*H`;
+внешние ZIP entries не имеют encryption flag. Это не проверка
+подписи и не доказательство отсутствия шифрования внутри контейнеров.
+Config `wa345t_0000_v17.02.0501_20260529.pro.cfg.sig` имеет
+размер 25632 и SHA256
+`d743d563d0585701e85367f376725d4547439bc9e1a7761f034d561889ac4f00`.
+Файлы не извлекались и не передавались устройству.
+
+В именах повторяются component tokens: 1200 и 1202 по два раза,
+1100 три раза, 0103 два раза, с разными suffix/version.
+Их нельзя считать дубликатами или выбирать highest version
+без manifest/device applicability rules. Текущий Windows
+`package_target` читает модель/версию из имени config, а
+`validate_package` проверяет ZIP safety/CRC и наличие `.cfg.sig`;
+они не разбирают signed container и не проверяют криптографическую
+подпись. Для самостоятельного updater этих проверок недостаточно.
+
+Ближайшая задача: определить формат config и проследить его
+consumer в штатном updater, включая выбор компонентов и порядок
+операций. Затем требуется восстановить firmware-session protocol,
+transfer/acknowledgement, verify/apply и recovery, а также проверить
+Linux USB transport отдельно. Нельзя предполагать, что весь ZIP
+отправляется через MI04, только потому что этот канал успешно
+ответил на version/battery requests. Никаких новых live запросов,
+firmware операций или изменений production SDK на этом этапе не было.
+
+### Offline manifest: XML и сопоставление всех компонентов
+
+После утверждения Linux-updater направления разобрано содержимое
+config без исполнения/извлечения файлов и без device access.
+На данном config читаемый XML начинается в 0x260 и заканчивается
+после `</dji>` в 0x6405; далее newline и 26 zero bytes.
+Сумма header DWORDs по +0x10/+0x14 также равна 0x260, но
+семантика этих header fields и общий IM*H layout еще не доказаны.
+XML успешно разобран стандартным parser: root `dji`, device
+`wa345t`, firmware formal/release `17.02.0501`, 22 module entries.
+Release содержит antirollback/enforce metadata; их наличие/значение
+не означает разрешение обходить ограничения устройства.
+
+Каждая из 22 записей однозначно сопоставлена с ZIP member по
+component token, версии и размеру. Проверены MD5 полного содержимого
+всех 22 members: все совпали с manifest `md5`. Это integrity
+comparison, не cryptographic signature verification и не выбор
+подходящих файлов для конкретной аппаратуры.
+Повторяющиеся component tokens различаются manifest `type`:
+например ESC mc01/mc02, battery BA03WA345/WA345PTL/WA345GY0
+и IR sensor IA640/HK. Manifest содержит `support_multi_hw`,
+`order`, `upgrade_order`, loader/reboot/check/transfer timeouts
+и другие параметры; порядок/выбор нельзя выводить только из их имен.
+
+Все 22 entries задают `com_method="V1"` и `com_prama1`;
+формат адреса этих значений еще не привязан к wire packing.
+Module 0802 / WA345T_E2 имеет `is_upgrade_center="true"` и
+`op_lib_name="libeagle_md_up.so"`. Module 1502 / WA345T_V1
+задает `libstandard_v2_md_up.so`, `sec_type="secure"`;
+остальные — `libstandard_md_up.so`, `sec_type="normal"`.
+Отдельная XML section `upgrade_center/module_info` перечисляет
+WA345T_E2 и WA345T_V1 с `diff_up_capability="true"`.
+Эти строки не доказывают host Linux execution указанных библиотек:
+где и кем они используются, пока не установлено.
+
+В DJIService.exe не найдены точные null-terminated ASCII literals
+is_upgrade_center/support_multi_hw/op_lib_name/com_prama1/
+upgrade_center/libeagle_md_up.so. Это ограниченный string-search
+результат, не отсутствие parser: возможны другие encodings,
+обфускация или другой модуль. Следующая граница — native consumer
+config и передача пакета/manifest центру обновления.
+Production SDK и firmware writer не изменены, новых USB запросов нет.
+
+По предложению проверить FTP исследован USB network interface:
+present DJI VID/PID 2CA3/0020 MI00 определяется Windows как Remote NDIS
+based Internet Sharing Device. Его IPv4 на ПК — 192.168.42.1/24,
+default gateway отсутствует. В installed `DJIService.exe` найден literal
+192.168.42.120; это кандидат адреса, не доказательство FTP-сервиса.
+Маршрут к нему проверен через DJI RNDIS interface. Единственная TCP
+попытка к порту 21, с local bind 192.168.42.1, завершилась timeout
+через 4 секунды, без server banner. После попытки Windows neighbor
+entry 192.168.42.120 имела состояние Reachable: есть свидетельство
+разрешения сетевого соседа, но доступность FTP не подтверждена.
+Отсутствие FTP по этому адресу/порту во всех состояниях не доказано.
+Login, получение списка файлов, скачивание, запись, подбор credentials
+и сканирование портов/подсети не выполнялись.
 
 ```powershell
 dji-assistant diagnose
