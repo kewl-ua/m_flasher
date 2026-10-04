@@ -6,6 +6,96 @@
 
 Материалы ниже сохраняют ход исследования. Последующие записи могут уточнять ранние гипотезы; ограничения приведены рядом с результатами.
 
+## DUML: карта подтверждения
+
+Сводка на 2026-10-04. Номера ниже записаны в hex как
+`CmdSet/CmdId`, а не как адрес получателя. Совпадение номера команды
+не гарантирует одинаковые payload, адреса, encoding или поведение на
+разных платформах. Наличие имени в публичном dissector означает
+«описано сообществом», а не «доступно на M4T».
+
+### Что проверено нами
+
+| Объект / команда | Проверка | Результат и ограничение |
+|---|---|---|
+| USB MI04, OUT 04 / IN 85 | Descriptor, native ABI/host mapping; live обмен | Interface 4 / alt 0, bulk 512 на данном Windows-драйвере; Linux пока не проверен |
+| DUML framing / CRC | Offline-разбор live capture и отдельных ответов | Есть CRC8/CRC16-valid пакеты; полнота разбора потока не заявляется |
+| `00/01` — версия | Один самостоятельный запрос, CRC и обратные адреса/sequence | Ответ 17.02.0501 совпал с Assistant Current; полная схема ответа не подтверждена |
+| `0D/02` — dynamic battery | Три отдельно разрешенные однократные попытки | При исправленном фильтре flags 80/result 00/payload 45: raw offset 21 совпал с 35% и последующим 33%; универсальный SOC decoder не подтвержден |
+| `03/43` — OSD | Пассивное наблюдение и offline-анализ | Наблюдался payload 84 байта; проверенный SOC не найден, самостоятельный запрос не выполнялся |
+| `00/78`, payload 01, receiver A2 | Только static native tracing | Найденная checker-ветка связана с `rcp501`; не установленный запрос батареи M4T, не отправлялся |
+| `00/0C` — device state | Только static Go metadata | Loader/no-repower/version fields; named SOC нет, не отправлялся |
+| `00/1F` — log-export subscription | Только static Go metadata/consumer | Подписка concrete log-export type, не battery API; workflow не запускался |
+| SmartBattery Qt push | Только static C++ dispatcher | Копируется 30 байт; значение +0x34 = 0x51 пока не связано с wire `03/51`, SOC не декодирован |
+| Firmware write через прямой DUML | Не выполнялось | Штатные UI-прошивки не доказывают работу самостоятельного USB writer |
+
+Подробности и оговорки: [battery queries](../telemetry/battery.md),
+[native analysis](../native/analysis.md),
+[штатные UI-прошивки](../../validation/firmware-live.md).
+Первый отрицательный battery result относится к ошибочно строгому
+exact-C0 фильтру; без сохраненного raw stream его нельзя переоценить.
+
+### Что еще описано в открытых источниках
+
+Это выборочная карта направлений, не полный список DUML и не набор
+готовых запросов. Во всех строках ниже live-совместимость с нашим M4T
+**не проверена**, кроме пересечений, явно отмеченных в таблице выше.
+Некоторые entries содержат только имя, без полного dissector.
+
+| Направление | CmdSet/CmdId из источника | Что описано | Источник / наш статус |
+|---|---|---|---|
+| Идентификация | `00/51`, `00/FF` | Serial number, device/build information | [General][duml-general]; не запрашивали |
+| Общая диагностика | `00/4B`, `00/4C`, `00/54`, `00/55` | Date/time, module system status, temperature, alive time | [General][duml-general]; layout/единицы/адреса M4T не установлены |
+| Static battery | `0D/01`, `0D/04`, `0D/05` | Static data, barcode, history | [Protocol tables][duml-proto]; только публичные названия, не проверенные поля M4T |
+| Dynamic battery | `0D/02`, `0D/03`, `0D/06`, `0D/32` | Dynamic data, cell voltages, common info, multi-battery info | [Protocol tables][duml-proto]; только `0D/02` проверен в ограниченном объеме; остальные не отправлялись |
+| Альтернативная battery-ветка | `05/02`, `05/06`, `05/07`, `05/08`, `05/21`, `05/22` | Center-board battery dynamic/common/status/history/static data | [Protocol tables][duml-proto]; это отдельный CmdSet, не замена `0D/02` без проверки |
+| Flight-controller telemetry | `03/01`, `03/0A`, `03/43`, `03/44`, `03/45`, `03/51` | Status, battery status, OSD, home point, GPS SNR, smart battery status | [Flight Control][duml-flyc]; `03/43` наблюдали пассивно, остальное не подтверждено |
+| Vision / RTK | `0A/07`, `0A/2F`, `0F/09` | Obstacle info, sensor status, RTK status | [Protocol tables][duml-proto]; не проверяли |
+| Файловый обмен | `00/20`, `00/21`, `00/22`, `00/23`, `00/24`, `00/25`, `00/2A` | List/info, send/receive, segments/error/general transfer | [General][duml-general]; это не доказательство передачи официального ZIP или firmware route |
+| Upgrade session | `00/07`, `00/08`, `00/09`, `00/0A`, `00/0F` | Loader entry, prepare/start, data transfer, verify, consistency request | [General][duml-general]; не отправляли, порядок/payload/ACK/apply для M4T не восстановлены |
+| Upgrade notifications/control | `00/40`, `00/41`, `00/42`, `00/43` | Descriptor push, control, progress/status, finish | [General][duml-general]; роли request/push и M4T session не установлены |
+
+В источнике также есть camera/gimbal/RC/link command families.
+Они не исследованы нами как интерфейсы M4T; публичный каталог не является
+официальной матрицей поддержки DJI.
+
+### Граница безопасного продолжения
+
+Название `Get` не гарантирует отсутствие побочных эффектов: команда может
+изменять push subscription или режим модуля. Перед отдельным экспериментом
+нужно проверить payload, receiver, encoding/result, минимальную длину,
+correlation и условия устройства; подбор адресов/команд не выполняется.
+Приоритет чтения: static battery/cell voltage, device identification/state,
+затем независимая сверка каждого поля. Это направления исследования,
+не разрешение на отправку.
+
+Loader/update/file-transfer, reboot, battery shutdown, activation,
+authentication, setters, calibration и flight/motor control не входят
+в read-only scope. Для Linux updater сначала требуется восстановить
+[manifest consumer и upgrade protocol](../firmware/linux-updater.md),
+а не отправлять последовательность исторических номеров из dissector.
+В рамках этой документационной сверки новых USB-запросов не было.
+
+### Открытые источники и воспроизводимость
+
+Проверены 2026-10-04 в community-проекте `o-gs/dji-firmware-tools`,
+revision `195692263c2684cf1ddc4995f2736be6c0fb135e`:
+
+- [Protocol tables][duml-proto]: CmdSet, адресные типы, ACK/encoding names,
+  battery/center-board/vision/RTK command names.
+- [General][duml-general]: идентификация, диагностика, файлы и upgrade.
+- [Flight Control][duml-flyc]: OSD, GPS и battery command names.
+
+Это reverse-engineered сведения, в том числе о старых DJI платформах;
+комментарии прямо отмечают разные назначения некоторых номеров.
+Закрепленная revision позволяет повторить сверку независимо от будущих
+изменений ветки master. Публичные названия не подтверждают firmware/auth
+совместимость M4T и не заменяют наши live результаты.
+
+[duml-proto]: https://github.com/o-gs/dji-firmware-tools/blob/195692263c2684cf1ddc4995f2736be6c0fb135e/comm_dissector/wireshark/dji-dumlv1-proto.lua
+[duml-general]: https://github.com/o-gs/dji-firmware-tools/blob/195692263c2684cf1ddc4995f2736be6c0fb135e/comm_dissector/wireshark/dji-dumlv1-general.lua
+[duml-flyc]: https://github.com/o-gs/dji-firmware-tools/blob/195692263c2684cf1ddc4995f2736be6c0fb135e/comm_dissector/wireshark/dji-dumlv1-flyc.lua
+
 ## Исследование прямого USB-чтения M4T
 
 Read-only наблюдение 2026-10-04 подтвердило USB composite

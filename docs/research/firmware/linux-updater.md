@@ -45,6 +45,11 @@ firmware операций или изменений production SDK на этом
 
 ## Offline manifest: XML и сопоставление всех компонентов
 
+Полный offline-каталог вынесен в
+[XML manifest и ZIP entries](./package-manifest.md): байтовые границы,
+header DWORDs, release metadata, все 22 records/filenames/MD5,
+словарь атрибутов, флаги/таймауты и открытые вопросы.
+
 После утверждения Linux-updater направления разобрано содержимое
 config без исполнения/извлечения файлов и без device access.
 На данном config читаемый XML начинается в 0x260 и заканчивается

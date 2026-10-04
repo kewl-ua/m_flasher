@@ -39,6 +39,10 @@
 
 ### Маршрут к Linux updater
 
+Подробный [каталог XML manifest и ZIP entries](./research/firmware/package-manifest.md)
+фиксирует все 22 компонента, config bounds, metadata и значения атрибутов,
+отдельно от неподтвержденной семантики native updater.
+
 1. [Пакет и manifest](./research/firmware/linux-updater.md): состав, варианты
    аппаратуры и upgrade center; MD5 не заменяет проверку подписи.
 2. [Native consumer и dispatch](./research/native/analysis.md): установленные
