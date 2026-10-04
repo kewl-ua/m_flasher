@@ -93,6 +93,28 @@ bulk-интерфейсы нашим кодом не захватывались.
 Публичный USB bulk transport существует, но совместимость готовых
 сторонних CLI-команд с Matrice 4T не подтверждена.
 
+Следующий read-only этап получил полный USB configuration descriptor
+через стандартный Windows hub GET_DESCRIPTOR (не команду DJI):
+213 байт, 8 interfaces. Наблюдавшийся OUT 04 / IN 85 принадлежит
+interface 4, alternate 0 (MI04), class FF/subclass 43/protocol 01;
+оба endpoints bulk, max packet size 512. Другие vendor-specific
+интерфейсы имеют пары 03/84, 05/86, 06/87 и 07/88; назначение этих
+каналов не установлено, пробные команды на них не отправлялись.
+
+DLL из каталога Assistant имеют PE machine 014C (32-bit), несовместимый
+с нашим 64-bit Python. Системная libusb0_device.dll имеет PE machine 8664
+и версию 1.2.6.0, экспортирует функции перечисления/open/claim/bulk.
+Ее native enumeration видит пять DJI device paths, однако раскладка
+usb_device из проверенного публичного заголовка не дала валидных
+device descriptor полей. Источник ABI-несовпадения пока не установлен;
+исправлять его подбором смещений или угадыванием interface нельзя.
+Наш пробник не вызывал usb_open, claim, bulk read/write, reset,
+set_configuration либо set_altinterface. Стандартный Windows
+GET_DESCRIPTOR выше выполнен отдельно через hub API.
+Самостоятельный запрос версии отложен до проверки native ABI/транспорта.
+Временный пробник удален, установленный SDK USB backend по-прежнему
+не содержит. Установленные файлы DJI и драйверы не изменялись.
+
 ```powershell
 dji-assistant diagnose
 dji-assistant firmware-probe
