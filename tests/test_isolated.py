@@ -9,11 +9,27 @@ from dji_assistant._isolated_worker import (
     _dispatch, _initialize, _IsolatedOfflinePage, _assert_reusable_desktop,
 )
 from dji_assistant.exceptions import UnexpectedAssistantState
-from dji_assistant.isolated import _receive, _send
+from dji_assistant.isolated import _receive, _send, _window_desktop
 from dji_assistant.models import FirmwareStage, FirmwareStatus, FirmwareVersion
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_closed_window_reports_actionable_error_before_desktop_lookup(self):
+        with patch("dji_assistant.isolated.win32gui.IsWindow", return_value=False), patch(
+            "dji_assistant.isolated.win32process.GetWindowThreadProcessId",
+        ) as lookup:
+            with self.assertRaisesRegex(UnexpectedAssistantState, "no longer exists"):
+                _window_desktop(42)
+        lookup.assert_not_called()
+
+    def test_window_disappearing_during_lookup_does_not_report_winerror_zero(self):
+        with patch("dji_assistant.isolated.win32gui.IsWindow", return_value=True), patch(
+            "dji_assistant.isolated.win32process.GetWindowThreadProcessId", return_value=(0, 0),
+        ), patch("dji_assistant.isolated._USER32") as user32:
+            with self.assertRaisesRegex(UnexpectedAssistantState, "disappeared"):
+                _window_desktop(42)
+        user32.GetThreadDesktop.assert_not_called()
+
     def test_outbound_oversize_and_nonfinite_payload_never_sent(self):
         for message in ({"text": "x" * 65536}, {"timeout": float("nan")}):
             with self.subTest(message_type=next(iter(message))):

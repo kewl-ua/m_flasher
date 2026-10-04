@@ -15,6 +15,7 @@ from ctypes import wintypes
 from pathlib import Path
 
 import win32event
+import win32gui
 import win32process
 
 from .constants import WINDOW_TITLE
@@ -60,7 +61,17 @@ def _desktop_name(handle: int) -> str:
 
 
 def _window_desktop(handle: int) -> str:
+    if not win32gui.IsWindow(handle):
+        raise UnexpectedAssistantState(
+            "Assistant window or owned dialog no longer exists. "
+            "Disconnect the old controller and inspect application state; "
+            "use explicit launch only after confirming DJI processes have exited."
+        )
     thread, _ = win32process.GetWindowThreadProcessId(handle)
+    if not thread:
+        raise UnexpectedAssistantState(
+            "Window disappeared during desktop ownership lookup; no action performed."
+        )
     desktop = _USER32.GetThreadDesktop(thread)
     if not desktop:
         raise ctypes.WinError(ctypes.get_last_error())
