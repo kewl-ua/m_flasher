@@ -61,6 +61,11 @@ config совпал с нашим ZIP побайтно, 22 firmware — по SHA
 Отчеты о файлах отделены от отсутствующих в JSONL data chunks.
 Внешняя реализация не интегрирована; Linux и смена версии не проверены.
 
+Позднейшая [raw-проверка CLI-смены версии](./research/firmware/direct-upgrade-capture.md)
+подтвердила 17.01.0516 -> 17.02.0501, все 23 file hashes, два reconnect,
+terminal и конечную версию. Установлены пропуски ACK sequence и уточнены
+границы времени передачи. Linux и recovery по-прежнему открыты.
+
 Подробный [каталог XML manifest и ZIP entries](./research/firmware/package-manifest.md)
 фиксирует все 22 компонента, config bounds, metadata и значения атрибутов,
 отдельно от неподтвержденной семантики native updater.
