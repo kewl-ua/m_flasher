@@ -27,7 +27,7 @@
 | `00/0C` — device state | Только static Go metadata | Loader/no-repower/version fields; named SOC нет, не отправлялся |
 | `00/1F` — log-export subscription | Только static Go metadata/consumer | Подписка concrete log-export type, не battery API; workflow не запускался |
 | SmartBattery Qt push | Только static C++ dispatcher | Копируется 30 байт; значение +0x34 = 0x51 пока не связано с wire `03/51`, SOC не декодирован |
-| Firmware write через прямой DUML | Не выполнялось | Штатные UI-прошивки не доказывают работу самостоятельного USB writer |
+| Firmware file-transfer через DUML | Offline-разбор предоставленного полного capture | 23 файла по `00/2A` на 48, совпавшие MD5; собственный writer не запускался, apply/success не декодированы |
 
 Подробности и оговорки: [battery queries](../telemetry/battery.md),
 [native analysis](../native/analysis.md),
@@ -36,6 +36,10 @@
 exact-C0 фильтру; без сохраненного raw stream его нельзя переоценить.
 
 ### Что еще описано в открытых источниках
+
+Новый [отчет по capture 17.01.0516](../firmware/capture-transfer.md)
+подтверждает формат open/data/finish `00/2A` и корректирует направление
+`00/81` / `00/82`: инициатор 48, ПК отвечает. Полный workflow не восстановлен.
 
 Это выборочная карта направлений, не полный список DUML и не набор
 готовых запросов. Во всех строках ниже live-совместимость с нашим M4T
@@ -51,7 +55,7 @@ exact-C0 фильтру; без сохраненного raw stream его не�
 | Альтернативная battery-ветка | `05/02`, `05/06`, `05/07`, `05/08`, `05/21`, `05/22` | Center-board battery dynamic/common/status/history/static data | [Protocol tables][duml-proto]; это отдельный CmdSet, не замена `0D/02` без проверки |
 | Flight-controller telemetry | `03/01`, `03/0A`, `03/43`, `03/44`, `03/45`, `03/51` | Status, battery status, OSD, home point, GPS SNR, smart battery status | [Flight Control][duml-flyc]; `03/43` наблюдали пассивно, остальное не подтверждено |
 | Vision / RTK | `0A/07`, `0A/2F`, `0F/09` | Obstacle info, sensor status, RTK status | [Protocol tables][duml-proto]; не проверяли |
-| Файловый обмен | `00/20`, `00/21`, `00/22`, `00/23`, `00/24`, `00/25`, `00/2A` | List/info, send/receive, segments/error/general transfer | [General][duml-general]; это не доказательство передачи официального ZIP или firmware route |
+| Файловый обмен | `00/20`, `00/21`, `00/22`, `00/23`, `00/24`, `00/25`, `00/2A` | List/info, send/receive, segments/error/general transfer | [General][duml-general]; `00/2A` теперь подтвержден отдельным capture firmware files; остальные не проверены |
 | Upgrade session | `00/07`, `00/08`, `00/09`, `00/0A`, `00/0F` | Loader entry, prepare/start, data transfer, verify, consistency request | [General][duml-general]; не отправляли, порядок/payload/ACK/apply для M4T не восстановлены |
 | Upgrade notifications/control | `00/40`, `00/41`, `00/42`, `00/43` | Descriptor push, control, progress/status, finish | [General][duml-general]; роли request/push и M4T session не установлены |
 

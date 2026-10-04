@@ -116,6 +116,13 @@ dji                                      без атрибутов, 1 child
         module                           name=WA345T_V1, diff_up_capability=true
 ```
 
+Уточнение после анализа capture: каждый `release/module` содержит
+**text content с точным filename `.fw.sig`**, хотя child elements у него нет.
+Это проверено на исходном ZIP и переданном config другого release.
+Наш ранний поиск по id/version/size дал корректное сопоставление,
+но прямая связь по тексту module предпочтительнее угадывания имени.
+Text filename требует проверки пути, уникальности, размера и хеша.
+
 22 firmware records и две записи `module_info` выполняют разные роли:
 это 24 XML elements с tag `module`, но только 22 firmware components.
 Считать все `root.iter("module")` файлами прошивки было бы ошибкой.
@@ -571,6 +578,12 @@ DJIServices DLL: Bs, ChargingCase, Controller, Datalink, Rc2, Rc, Rtk, Uav.
 Следующая граница — native module records и center routing.
 
 ## 10. Что нужно подтвердить до writer
+
+Следующее свидетельство: [полный USB capture передачи](./capture-transfer.md)
+подтверждает 23 file transfers по DUML `00/2A` на 48, но относится
+к release 17.01.0516, не к данному ZIP. Передаются все hardware variants.
+Таблица ниже фиксировала границы до capture; актуальные transfer/ACK
+результаты и нерешенные вопросы приведены в отдельном отчете.
 
 | Граница | Есть сейчас | Нужно установить |
 |---|---|---|

@@ -29,6 +29,15 @@
   для этого config. Подписи, hardware selection и upgrade-center protocol
   пока не подтверждены; Linux writer не реализован.
   Подробности: [XML manifest и native consumer](./docs/research/firmware/package-manifest.md).
+- Предоставленный полный USB capture независимо разобран offline:
+  23 файла release **17.01.0516** переданы по DUML `00/2A` на адрес 48;
+  **666015264 байта за 61,05 секунды**; размеры, непрерывность chunks
+  и finish MD5 совпали. Переданы все hardware variants из manifest.
+  Команды `00/81` и `00/82` инициирует 48, ПК отвечает; data ACK
+  имеют собственный sequence. Session setup, pacing, apply и recovery
+  еще не восстановлены. Это не проверка нашего Linux writer
+  и не подтверждение Current после reboot.
+  [Результаты и поправки к пересказу](./docs/research/firmware/capture-transfer.md).
 - **120 unit-тестов**; живые проверки описаны в [отчете о валидации](./docs/validation/coverage.md) отдельно от unit-тестов.
 
 Быстрый старт скрытого режима и ограничения:

@@ -39,6 +39,11 @@
 
 ### Маршрут к Linux updater
 
+Новое live-свидетельство, проверенное offline:
+[USB передача 23 файлов release 17.01.0516](./research/firmware/capture-transfer.md).
+Подтверждены file bytes/MD5 и направление команд; полный session/apply
+workflow и Linux implementation пока не подтверждены.
+
 Подробный [каталог XML manifest и ZIP entries](./research/firmware/package-manifest.md)
 фиксирует все 22 компонента, config bounds, metadata и значения атрибутов,
 отдельно от неподтвержденной семантики native updater.
