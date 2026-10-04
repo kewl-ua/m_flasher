@@ -2,7 +2,8 @@
 
 [Карта документации](../../README.md) |
 [Linux updater](./linux-updater.md) |
-[Каталог пакета 17.02.0501](./package-manifest.md)
+[Каталог пакета 17.02.0501](./package-manifest.md) |
+[Offline Upgrade и сравнение captures](./capture-offline-upgrade.md)
 
 ## Статус
 
@@ -12,9 +13,11 @@
 Config разобран в памяти. Новых запросов устройству, прошивок или replay
 исследователем не выполнялось.
 
-Передача файлов подтверждена значительно лучше, чем полный upgrade workflow:
-session setup, статусы завершения, recovery и текущая версия дрона
-этой проверкой не установлены. Это не готовый алгоритм writer.
+Первичная проверка установила прежде всего file transfer.
+Последующий [разбор control/status и Offline Upgrade](./capture-offline-upgrade.md)
+добавил `83/84/85`, terminal `04 01 00` и post-reconnect `4F`, согласующийся
+с release 17.01.0516. Полный контракт session, recovery и текущая live-версия
+дрона не установлены. Это не готовый алгоритм writer.
 
 ## Исходные файлы и границы захвата
 
@@ -187,21 +190,24 @@ Config передан первым, затем 22 firmware records в XML docume
 | Команда / направление | Наблюдение |
 |---|---|
 | `48 -> 2A`, `00/81`, flags 40 | 294 packets; примеры приходят на IN 85 |
-| `2A -> 48`, `00/81`, flags 80 | 294 ответов ПК; sample sequence совпадает с входящим |
+| `2A -> 48`, `00/81`, flags 80 | 294 ответов ПК; все пары проверены по sequence/address/command |
 | `48 -> 2A`, `00/82`, flags 40 | 294 packets; входящие на IN 85 |
 | `2A -> 48`, `00/82`, flags 80 | 294 ответов ПК |
 | `2A -> 48`, `00/83`, flags 40 | Две отправки payload `04`, с одинаковым sequence 12959 |
-| `48 -> 2A`, `00/83`, flags C0 | Два ответа; полная семантика не установлена |
+| `48 -> 2A`, `00/83`, flags C0 | Два ответа `00 07 00`; первый пришел до второй отправки |
 | `48 -> 2A`, `00/42`, flags 00 | 82 notifications; первые sample payloads `03 00 00`, `03 03 00` |
 | `2A -> 1F`, `00/01`, flags 40 | 103 version requests за весь USB capture, столько же обратных C0 replies |
 
 Следовательно, фраза «Assistant раз в секунду опрашивает 48 через 81/82
 вместо Version Inquiry к 1F» неверна: в observed packets инициатор
 81/82 — **48**, ПК отвечает, а version inquiry тоже присутствует.
-Интервал около секунды виден в первых samples; полная timing статистика
-и роль 81/82 в authorization/session пока не восстановлены.
-Наличие `00/42` не дает права трактовать конкретные bytes как success:
-module/status parser и критерий конца установки требуют отдельной проверки.
+Последующая проверка всех пар 81/82 подтвердила корреляцию и медианы
+интервалов 1.000003 / 0.999969 s. Роль этих команд в authorization/session
+не установлена. Terminal `00/42` равен `04 01 00`, согласуется с
+public-schema Complete / Success; длинные 147-byte payload этим старым
+decoder полностью не описаны. Развернутая последовательность, ACK timing,
+post-reconnect `4F` и ограничения приведены в
+[сравнении двух captures](./capture-offline-upgrade.md).
 
 ## Сеть и вывод об FTP
 
@@ -228,10 +234,10 @@ Network timestamps покрывают все окно file-transfer, но зак
 1. Полный preflight/session flow: 81/82/83, другие управляющие команды,
    authorization и обязательные ответы ПК.
 2. Правило pacing/window ACK, duplicate indices, timeout и recovery.
-3. Семантика `00/42`, окончательное verify/apply и чтение версии после reboot.
+3. Native-подтверждение `00/42`/`4F`, ошибок и окончательных post-upgrade checks.
 4. Реальная device-side hardware selection и связь 48 с upgrade-center.
-5. Повторная проверка именно Offline Upgrade пакета 17.02.0501:
-   этот захват относится к manifest 17.01.0516.
+5. [Проверка Offline Upgrade 17.02.0501 выполнена](./capture-offline-upgrade.md):
+   содержимое файлов совпало с ZIP; обязательность этапов и recovery еще не проверены.
 6. Отдельно проверенный Linux transport; Windows capture не проверяет Linux.
 
 Не воспроизводить сырые пакеты как сценарий. Sequence, адрес USB,

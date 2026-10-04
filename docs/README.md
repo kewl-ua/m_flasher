@@ -31,7 +31,7 @@
 
 | Категория | Документ | Подтверждено | Еще не установлено |
 |---|---|---|---|
-| Транспорт | [USB и DUML](./research/transport/usb-duml.md) | Descriptor/ABI, единичный коррелируемый ответ версии на M4T | Production backend, Linux transport, применимость канала к firmware transfer |
+| Транспорт | [USB и DUML](./research/transport/usb-duml.md) | Descriptor/ABI, единичный коррелируемый ответ версии; firmware transfer по предоставленным captures | Production backend, Linux transport, полный контракт firmware session |
 | Телеметрия | [Батарея](./research/telemetry/battery.md) | Стабильное совпадение кандидата SOC при 35%; отдельный переход 34 -> 33% | Универсальный decoder и production API |
 | Native internals | [Checker, Core, Qt и dispatch](./research/native/analysis.md) | Конкретные статические связи на бинарных images с указанными hashes | Live-выбор всех веток и полная семантика полей |
 | Прошивка | [Linux updater и manifest](./research/firmware/linux-updater.md) | Читаемый XML; сопоставление и MD5 всех 22 компонентов | Подписи, аппаратный выбор, session/ACK/apply/recovery, Linux writer |
@@ -43,6 +43,12 @@
 [USB передача 23 файлов release 17.01.0516](./research/firmware/capture-transfer.md).
 Подтверждены file bytes/MD5 и направление команд; полный session/apply
 workflow и Linux implementation пока не подтверждены.
+
+[Сравнение с Offline Upgrade 17.02.0501](./research/firmware/capture-offline-upgrade.md):
+config совпал с нашим ZIP побайтно, 22 firmware — по SHA256.
+Добавлены управляющая последовательность двух прогонов, ACK timing,
+расширенные `42`, terminal и post-reconnect `4F`; границы схемы и recovery
+остаются открытыми.
 
 Подробный [каталог XML manifest и ZIP entries](./research/firmware/package-manifest.md)
 фиксирует все 22 компонента, config bounds, metadata и значения атрибутов,

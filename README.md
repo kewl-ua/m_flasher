@@ -34,10 +34,16 @@
   **666015264 байта за 61,05 секунды**; размеры, непрерывность chunks
   и finish MD5 совпали. Переданы все hardware variants из manifest.
   Команды `00/81` и `00/82` инициирует 48, ПК отвечает; data ACK
-  имеют собственный sequence. Session setup, pacing, apply и recovery
-  еще не восстановлены. Это не проверка нашего Linux writer
-  и не подтверждение Current после reboot.
+  имеют собственный sequence. Полный контракт session, pacing и recovery
+  еще не восстановлен. Это не проверка нашего Linux writer.
   [Результаты и поправки к пересказу](./docs/research/firmware/capture-transfer.md).
+- Второй capture штатного **Offline Upgrade 17.02.0501** подтвердил
+  содержимое нашего ZIP: config совпал побайтно, все 22 firmware — по SHA256;
+  **665796192 байта за 69,73 секунды**. В обоих captures получены terminal
+  `04 01 00` и post-reconnect `4F`, согласующийся с целевым release.
+  Найдены разные длины расширенного `42` и ACK с медианой около 100 ms;
+  универсальная схема статусов, ошибки и recovery еще не подтверждены.
+  [Сравнение online/offline и управляющая последовательность](./docs/research/firmware/capture-offline-upgrade.md).
 - **120 unit-тестов**; живые проверки описаны в [отчете о валидации](./docs/validation/coverage.md) отдельно от unit-тестов.
 
 Быстрый старт скрытого режима и ограничения:

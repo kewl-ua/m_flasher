@@ -27,7 +27,10 @@
 | `00/0C` — device state | Только static Go metadata | Loader/no-repower/version fields; named SOC нет, не отправлялся |
 | `00/1F` — log-export subscription | Только static Go metadata/consumer | Подписка concrete log-export type, не battery API; workflow не запускался |
 | SmartBattery Qt push | Только static C++ dispatcher | Копируется 30 байт; значение +0x34 = 0x51 пока не связано с wire `03/51`, SOC не декодирован |
-| Firmware file-transfer через DUML | Offline-разбор предоставленного полного capture | 23 файла по `00/2A` на 48, совпавшие MD5; собственный writer не запускался, apply/success не декодированы |
+| Firmware file-transfer через DUML | Offline-разбор двух предоставленных captures | По 23 файла `00/2A` на 48; MD5 проверены, Offline Upgrade совпал с ZIP также по SHA256; собственный writer не запускался |
+| `00/81` / `00/82` | Все пары двух captures | Инициатор 48, ПК отвечает; command/address/sequence совпадают; роль в authorization неизвестна |
+| `00/83` / `00/84` / `00/85` | CRC-валидные control exchanges двух captures | Наблюдаемый порядок установлен; `84` содержит сумму bytes, `85` отвечает `06` в обоих прогонах; полная семантика неизвестна |
+| `00/42` / `00/4F` / `00/41` | Terminal и post-reconnect exchanges | `04 01 00` согласуется с public Complete / Success, `4F` — с целевым release; длинные `42` и универсальный Current API не декодированы полностью |
 
 Подробности и оговорки: [battery queries](../telemetry/battery.md),
 [native analysis](../native/analysis.md),
@@ -40,6 +43,8 @@ exact-C0 фильтру; без сохраненного raw stream его не�
 Новый [отчет по capture 17.01.0516](../firmware/capture-transfer.md)
 подтверждает формат open/data/finish `00/2A` и корректирует направление
 `00/81` / `00/82`: инициатор 48, ПК отвечает. Полный workflow не восстановлен.
+[Второй capture и сравнение](../firmware/capture-offline-upgrade.md)
+добавляют 17.02.0501, control sequence, ACK timing и границы status decoder.
 
 Это выборочная карта направлений, не полный список DUML и не набор
 готовых запросов. Во всех строках ниже live-совместимость с нашим M4T
@@ -57,7 +62,7 @@ exact-C0 фильтру; без сохраненного raw stream его не�
 | Vision / RTK | `0A/07`, `0A/2F`, `0F/09` | Obstacle info, sensor status, RTK status | [Protocol tables][duml-proto]; не проверяли |
 | Файловый обмен | `00/20`, `00/21`, `00/22`, `00/23`, `00/24`, `00/25`, `00/2A` | List/info, send/receive, segments/error/general transfer | [General][duml-general]; `00/2A` теперь подтвержден отдельным capture firmware files; остальные не проверены |
 | Upgrade session | `00/07`, `00/08`, `00/09`, `00/0A`, `00/0F` | Loader entry, prepare/start, data transfer, verify, consistency request | [General][duml-general]; не отправляли, порядок/payload/ACK/apply для M4T не восстановлены |
-| Upgrade notifications/control | `00/40`, `00/41`, `00/42`, `00/43` | Descriptor push, control, progress/status, finish | [General][duml-general]; роли request/push и M4T session не установлены |
+| Upgrade notifications/control | `00/40`, `00/41`, `00/42`, `00/43` | Descriptor push, control, progress/status, finish | [General][duml-general]; `42` push и последующий `41/04` наблюдались в captures; полный M4T decoder и обязательность команд не установлены |
 
 В источнике также есть camera/gimbal/RC/link command families.
 Они не исследованы нами как интерфейсы M4T; публичный каталог не является
