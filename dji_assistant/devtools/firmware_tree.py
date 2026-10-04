@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import re
 from collections import Counter
 
@@ -14,7 +15,7 @@ from dji_assistant.backend.uia.helpers import (
     safe_descendants,
     safe_parent,
 )
-from dji_assistant.constants import FIRMWARE_ACTION_NAMES
+from dji_assistant.constants import FIRMWARE_ACTION_NAMES, WINDOW_TITLE
 
 console = Console()
 
@@ -141,10 +142,10 @@ def print_row(row, version: str):
     console.print(table)
 
 
-def main():
+def main(window_title: str = WINDOW_TITLE):
     console.print("[bold]Connecting to DJI Assistant...[/bold]")
 
-    with DJIAssistant.connect() as dji:
+    with DJIAssistant.connect(title=window_title) as dji:
         console.print("[green]OK[/green] UIA window connected")
 
         dji.firmware.open()
@@ -215,4 +216,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--window-title", default=WINDOW_TITLE)
+    args = parser.parse_args()
+    main(window_title=args.window_title)

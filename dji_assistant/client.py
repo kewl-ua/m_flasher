@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .backend.uia.session import UIASession
+from .constants import WINDOW_TITLE
 from .pages.firmware import FirmwarePage
 
 
@@ -10,8 +11,8 @@ class DJIAssistant:
         self.firmware = FirmwarePage(session)
 
     @classmethod
-    def connect(cls) -> "DJIAssistant":
-        return cls(UIASession().connect())
+    def connect(cls, title: str = WINDOW_TITLE) -> "DJIAssistant":
+        return cls(UIASession(title=title).connect())
 
     def close(self):
         self._session.close()

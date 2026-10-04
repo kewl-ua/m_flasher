@@ -12,7 +12,7 @@ VERSION_RE = re.compile(r"\b[Vv]?(\d+(?:\.\d+){2,})\b")
 
 class FirmwarePage(BasePage):
     def open(self) -> "FirmwarePage":
-        link = self.window.child_window(
+        link = self.session.window_spec.child_window(
             title=FIRMWARE_LINK_NAME,
             control_type="Hyperlink",
         )
