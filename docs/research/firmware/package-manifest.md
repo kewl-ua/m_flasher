@@ -446,11 +446,135 @@ Binary identity и установленные updater/context anchors приве
 Наличие `DJIUpgradeMgr` и `DJIFirmwareUpgrader` не связывает их
 автоматически с этим XML и не устанавливает live strategy M4T.
 
-## 9. Что нужно подтвердить до writer
+## 9. Продолжение: native extraction и Qt XML consumer
+
+Последующий offline-анализ того же DJIService.exe с SHA256
+`37b8bdb0d0351e57fd313140439692355a514991d474ae6267f5a4a2657654a1`
+связал header arithmetic с реально найденной extraction routine.
+Функции не выполнялись. Адреса ниже — preferred VA PE32 image, base 0x400000.
+
+### Container gate 0x5A6AD0
+
+На входе используется QByteArray; import `0x8419A8` разрешен как
+`QByteArray::data() const`. Проверки в disassembly:
+
+| Anchor | Условие |
+|---|---|
+| `0x5A6AD9` | Размер QByteArray больше 0xC0 |
+| `0x5A6AEC` | Первое DWORD равно `0x482A4D49` / `IM*H` |
+| `0x5A6AF9` | Header +0x08 равен размеру QByteArray |
+| `0x5A6AFE` - `0x5A6B0A` | Header +0x18 + +0x14 + +0x10 равен +0x08 |
+| `0x5A6B18` | Вызов helper `0x5BE920` с data pointer, полным размером и 0 |
+| `0x5A6B20` | Возврат boolean true после helper |
+
+В этом gate после call `0x5BE920` нет проверки его return value.
+Поэтому успех gate нельзя использовать как свидетельство успешной
+проверки подписи. Это наблюдение данного участка, не вывод об отсутствии
+других проверок в полном workflow.
+
+### Extraction 0x5A55A0 и новое поле +0xC8
+
+Routine вызывает `QByteArray::data()`, затем конструирует новый QByteArray:
+
+```text
+start pointer = container.data + DWORD(+0x10) + DWORD(+0x14)
+length        = DWORD(+0xC8)
+```
+
+Anchors: чтение +0x14 в `0x5A55B9`, push +0xC8 в `0x5A55BC`,
+добавление +0x10 в `0x5A55C4` / `0x5A55C7`,
+call `0x841580` в `0x5A55CD`.
+Import `0x841580` — `QByteArray::QByteArray(char const*, int)`.
+Это подтверждает назначение +0xC8 как длины копируемого slice в этом
+helper, но не полный универсальный layout всех container versions.
+
+В нашем config:
+
+| Свойство | Значение |
+|---|---|
+| DWORD +0xC8 | 24998 / `0x61A6` |
+| Начало slice | `0x260` |
+| Exclusive конец native slice | `0x6406` |
+| Длина XML до конца `</dji>` | 24997 |
+| Дополнительный byte native slice | Завершающий newline `0A` |
+| Не включено в native slice | 26 trailing zero bytes |
+
+Ранее fingerprint XML был рассчитан для `[0x260:0x6405]`, без newline.
+Он остается корректным fingerprint того slice; его нельзя объявлять
+хешем native extraction `[0x260:0x6406]`.
+`+0x18=25024` включает zero tail, а `+0xC8=24998` — нет.
+Значит, отождествлять эти два поля как одну длину было бы ошибкой.
+
+В самом показанном extraction helper нет дополнительного bounds guard.
+Для нашего файла start/length находятся внутри container; общий безопасный
+parser обязан проверять bounds, overflow и version отдельно.
+
+### Конкретный caller и XML parser
+
+Disassembly caller подтверждает цепочку:
+
+```text
+0x62D8A0 -> 0x5A6AD0          container gate
+0x62D8A8                     test AL, ветка при false
+0x62D8CD -> 0x5A55A0          извлечение QByteArray slice
+0x62D8DC -> 0x4B6E40          XML consumer
+```
+
+В `0x4B6EC3` используется import `0x842500`,
+`QDomDocument::setContent(QByteArray const&, QString*, int*, int*)`;
+результат проверяется в `0x4B6EC9`. В `0x4B6EDE` используется
+`QDomDocument::documentElement()` через `0x8424F4`, затем `firstChild()`
+и `toElement()`. Это установленная static parser-цепочка, но
+идентичность конкретного caller как live M4T strategy еще не доказана.
+
+Внутри parser подтверждены literal `version` (`0x84854C`),
+`antirollback` (`0x848554`) и `from` (`0x848564`).
+Import `0x8424FC` — `QDomElement::attribute(QString const&, QString const&)`.
+Antirollback attribute читается в `0x4B702A`, затем `QString::toUInt`
+с base 10 через `0x841C2C` в `0x4B703A`; low byte записывается в
+объект +0x14 в `0x4B7046`. В найденном фрагменте это чтение атрибута,
+не доказательство enforcement на устройстве.
+Parser всех 46 module attributes и upgrade-center consumer еще не восстановлены.
+
+### Helper с auth/digest диагностикой: осторожная граница
+
+`0x5BE920` использует сумму header +0x10/+0x14 как data pointer offset.
+В `0x5BEA00` / `0x5BEA03` читается +0x28 и сравнивается с ASCII `PRAK`;
+в `0x5BEA28` выбирается одна static table, альтернативная ветка сравнивает
+`rrak`. Это native использование значения +0x28, но имена/формат ключей
+и crypto algorithm еще не установлены.
+
+Найдены diagnostic literals, связанные с helper:
+
+- `0x94D160`: `failed to auth the image: %s`;
+- `0x94D208`: `failed to verify the image: %s`;
+- `0x94D228`: `failed to calculate payload digest`.
+
+Названия согласуются с проверкой контейнера, однако routines
+`0x5BEBB0`, `0x5DEDB0`, `0x5DF0F0` пока не разобраны полностью.
+Ни наличие diagnostics, ни вызов helper не являются подтверждением
+успешной проверки нашего пакета: native методы не вызывались.
+Секреты/ключи не извлекались; обходы проверок не реализовывались.
+
+### Расширенная область string search
+
+Просмотрены 231 installed files по suffix `.exe/.dll/.so/.xml/.json/.ini`,
+исключая имена с префиксами `api-ms-`, `qt5`, `msvc`, `ucrt`, `vcruntime`.
+Поиск ASCII и UTF-16LE substrings не нашел `upgrade_center`, `com_method`,
+`com_prama1`, `op_lib_name`, `request_accept_data_to`, `md5_unsign`,
+`support_multi_hw`, `libeagle_md_up.so`.
+Это не охватывает `.asar`, иные suffix/encodings, составные строки
+и device-side binaries.
+`antirollback` и байты `IM*H` найдены в DJIService.exe и восьми
+DJIServices DLL: Bs, ChargingCase, Controller, Datalink, Rc2, Rc, Rtk, Uav.
+Само наличие этих bytes в DLL не доказывает тот же parser/consumer.
+Следующая граница — native module records и center routing.
+
+## 10. Что нужно подтвердить до writer
 
 | Граница | Есть сейчас | Нужно установить |
 |---|---|---|
-| Container parser | Magic, bytes и arithmetic на одном config | Layout/version/bounds и полный signed-region format |
+| Container parser | Native gate/extraction/Qt chain; +0xC8 slice на одном config | Полный layout/version/bounds и signed-region format |
 | Подлинность | Совпавшие MD5, SHA256 fingerprints | Signature verification, trust/key chain, защищенные metadata |
 | Hardware applicability | type/flags/variants | Как узнаются реальные hardware IDs и выбирается ровно подходящий record |
 | Component addressing | id и com_prama1 strings | Type/index packing, receiver routing, реальные transport params |

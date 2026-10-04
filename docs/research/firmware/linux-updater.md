@@ -91,6 +91,19 @@ upgrade_center/libeagle_md_up.so. Это ограниченный string-search
 config и передача пакета/manifest центру обновления.
 Production SDK и firmware writer не изменены, новых USB запросов нет.
 
+### Продолжение: container -> XML consumer
+
+Последующая static трассировка установила gate `0x5A6AD0`,
+extraction `0x5A55A0` и переход caller `0x62D8DC` к Qt XML parser
+`0x4B6E40`. Extraction использует start = +0x10 + +0x14 и length
+из +0xC8; в нашем config length 24998 включает XML/newline,
+но исключает 26 trailing zero bytes.
+Gate вызывает auth/digest helper, но не проверяет его return value
+в показанном участке; это не доказательство signature success.
+Полные anchors, импорты и границы вывода приведены в
+[native continuation каталога](./package-manifest.md#9-продолжение-native-extraction-и-qt-xml-consumer).
+Module selection, upgrade-center routing и writer по-прежнему не установлены.
+
 ## Связанные материалы
 
 [USB и DUML: транспорт и запрос версии](../transport/usb-duml.md) · [Native-анализ: battery checker, Core, Qt и USB dispatch](../native/analysis.md) · [Прошивка M4T: журнал живых проверок](../../validation/firmware-live.md)

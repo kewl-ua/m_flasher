@@ -98,6 +98,18 @@ revision `195692263c2684cf1ddc4995f2736be6c0fb135e`:
 
 ## Исследование прямого USB-чтения M4T
 
+### Повторное перечисление после переподключения
+
+На 2026-10-04 после сообщенного пользователем переподключения Windows
+PresentOnly PnP снова показывает VID 2CA3/PID 0020, MI00/MI02/MI03-MI07.
+Все перечисленные nodes имеют status OK, включая MI04/libusb-win32;
+DJI-процессы при проверке не обнаружены.
+Это чтение OS metadata, без open/claim/read/write USB и DUML queries.
+USB bus address и текущий libusb device path этой проверкой **не определены**.
+Исторические address 47 и libusb path нельзя использовать повторно
+без новой live mapping проверки. PnP InstanceId, bus address и
+внутренний libusb номер — разные идентификаторы.
+
 Read-only наблюдение 2026-10-04 подтвердило USB composite
 VID 2CA3 / PID 0020: RNDIS (MI00), Mass Storage (MI02) и пять
 vendor-specific bulk-интерфейсов MI03-MI07, class FF/subclass 43/protocol 01,

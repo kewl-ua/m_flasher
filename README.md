@@ -20,6 +20,15 @@
   один запрос версии M4T и получил коррелируемый CRC-валидный ответ
   17.02.0501. После этого штатный Assistant подтвердил прежний Current / idle.
   Это проверка конкретного устройства/драйвера, не готовый USB backend SDK.
+- После переподключения Windows повторно увидела DJI MI04 со статусом OK;
+  текущие USB bus address и libusb path еще не определены. Старые значения
+  нельзя повторно использовать без новой проверки привязки.
+- Linux updater: offline сопоставлены все 22 компонента официального ZIP,
+  их MD5 совпали с manifest. Статически найдена цепочка IM*H container ->
+  extraction -> Qt XML parser; поле +0xC8 задает slice длиной 24998 байт
+  для этого config. Подписи, hardware selection и upgrade-center protocol
+  пока не подтверждены; Linux writer не реализован.
+  Подробности: [XML manifest и native consumer](./docs/research/firmware/package-manifest.md).
 - **120 unit-тестов**; живые проверки описаны в [отчете о валидации](./docs/validation/coverage.md) отдельно от unit-тестов.
 
 Быстрый старт скрытого режима и ограничения:
