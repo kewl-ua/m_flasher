@@ -1,10 +1,29 @@
-# dji-assistant-sdk — milestone 0
+# dji-assistant-sdk
 
 Первый инженерный этап: построить надежную модель страницы Firmware Update
 на основе Accessibility/UIA дерева DJI Assistant 2.
 
 Команды диагностики и методы чтения SDK **не выполняют операций прошивки**.
 Отдельные экспериментальные прогоны через штатный UI описаны ниже.
+
+## Текущее состояние
+
+- Обычный SDK: чтение Current/таблицы/status, запуск приложения,
+  навигация и отдельно разрешаемые операции прошивки.
+- Экспериментальный скрытый режим: отдельный Windows desktop,
+  адресный ввод без физических кликов, восстановление через attach.
+  Доступен из Python (`IsolatedAssistant`) и CLI (`isolated`).
+  Запись прошивки в скрытом режиме не доступна.
+- Последняя проверенная версия Matrice 4T: **17.02.0501**, idle.
+  Исторические снимки ниже описывают состояние на момент каждого прогона.
+- **118 unit-тестов**; живые проверки описаны ниже отдельно от unit-тестов.
+
+Быстрый старт скрытого режима и ограничения:
+[CLI скрытого режима](#cli-скрытого-режима),
+[API IsolatedAssistant](#экспериментальный-api-isolatedassistant).
+Закройте обычный Assistant перед скрытым launch. Terms of Use и неизвестные
+диалоги пока могут требовать вмешательства пользователя; полностью
+безусловная автономность не гарантируется.
 
 ## Установка
 
@@ -15,7 +34,8 @@ py -m venv .venv
 pip install -e .
 ```
 
-DJI Assistant 2 должен быть уже запущен, а дрон подключен.
+Для обычных команд диагностики DJI Assistant 2 должен быть уже запущен,
+а дрон подключен. `isolated launch` запускает установленное приложение сам.
 
 ## Диагностика
 
@@ -760,9 +780,64 @@ recovered.quit_application()
 
 Поддержаны `open_device`, `current`, `status`, `ignore_flysafe`,
 `select_package`, `quit_application`, `close` и `attach`.
-CLI для этого режима пока нет. Terms of Use автоматически не принимаются;
+Для CLI доступна отдельная группа `isolated` (пример ниже).
+Terms of Use автоматически не принимаются;
 ручной показ скрытого desktop и взаимодействие с неизвестными диалогами
 не реализованы. Режим остается экспериментальным.
+
+### CLI скрытого режима
+
+Сначала штатно закройте обычный Assistant. Пример для PowerShell:
+
+```powershell
+$title = "DJI Assistant 2 (Enterprise Series)"
+$exe = "C:\Program Files (x86)\DJI Product\DJI Assistant 2 (Enterprise Series)\DJI Assistant 2.exe"
+dji-assistant --window-title $title isolated launch $exe
+dji-assistant --window-title $title isolated open-device "Matrice 4T" --timeout 45
+dji-assistant --window-title $title isolated current
+dji-assistant --window-title $title isolated status
+dji-assistant --window-title $title isolated ignore-flysafe
+dji-assistant --window-title $title isolated offline-select "C:\dev\fw_list\m4t\M4T_UAV_17.02.05.01_pro.zip"
+dji-assistant --window-title $title isolated quit
+```
+
+Проверяйте `$LASTEXITCODE` после каждого вызова: `0` означает успешную
+команду и отключение worker; `1` означает ошибку команды либо отключения.
+Ошибки аргументов возвращают `2` до подключения. Не продолжайте сценарий
+и не повторяйте действия автоматически после ошибки.
+
+`launch` запускает приложение и печатает desktop для восстановления.
+Остальные команды подключаются к существующему `DjiSdk_IsolatedAssistant`;
+после каждой команды worker штатно отключается, а Assistant остается
+на скрытом desktop. Только `isolated quit` закрывает приложение
+с проверкой idle и штатного выхода. Вызов `attach` проверяет подключение
+без навигации; если приложение закрыто, он сообщает ошибку, не запускает
+новый экземпляр. Для старого desktop можно явно указать имя:
+
+```powershell
+dji-assistant --window-title $title isolated attach --desktop DjiSdk_old_name
+dji-assistant --window-title $title isolated current --desktop DjiSdk_old_name
+```
+
+Все команды принимают `--timeout` (положительное конечное число секунд):
+launch по умолчанию 60, offline-select 120, quit 20, остальные 30.
+Он задает срок подключения, а для open-device, offline-select и quit
+также передается соответствующему действию. Для current/status/Ignore
+таймаут самого RPC остается стандартным API (30 секунд).
+Опции `--window-title` указываются до `isolated`, остальные опции
+после конкретной команды. Глобальные флаги физического/адресного ввода
+для этой группы запрещены: безопасные настройки заданы самим worker.
+Команд upgrade/downgrade/refresh/offline-upgrade в группе нет.
+offline-select только выбирает ZIP и возвращается на Firmware Update;
+Start Upgrade/Start Update не нажимаются.
+
+Live-прогон установленного CLI прошел последовательность launch,
+open-device, current, status, ignore-flysafe, offline-select, attach,
+current/status, quit отдельными вызовами. Current до и после выбора
+официального ZIP: 17.02.0501, idle. После quit процессов DJI/worker
+не осталось. Дополнительный attach с timeout 2 после закрытия вернул
+код 1 и не запустил приложение; в конце Assistant оставлен закрытым,
+как перед этим прогоном. Прошивки не запускались.
 
 Live-проверка самого API: отказ запуска при существующем обычном Assistant;
 изолированное открытие Matrice 4T, Current 17.02.0501 / idle,
@@ -832,7 +907,7 @@ desktop-объект; после второго и третьего множес
 
 Unit-тесты запускаются без устройства:
 `python -m unittest discover -s tests -v`.
-Текущий набор: **111 тестов, все прошли**; также прошли compileall и diff --check
+Текущий набор: **118 тестов, все прошли**; также прошли compileall и diff --check
 после изменений запуска и закрытия.
 Покрыты парсер, офлайн-версия вне таблицы, состояния, ошибки, таймауты,
 однократность нажатий, ожидаемое устройство/Current, подтверждения,
