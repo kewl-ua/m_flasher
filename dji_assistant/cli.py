@@ -31,6 +31,14 @@ def cmd_diagnose(window_title: str = WINDOW_TITLE):
 def main():
     parser = argparse.ArgumentParser(prog="dji-assistant")
     parser.add_argument("--window-title", default=WINDOW_TITLE)
+    parser.add_argument(
+        "--no-physical-input", action="store_true",
+        help="Disallow SDK mouse clicks, focus requests and physical-input fallbacks",
+    )
+    parser.add_argument(
+        "--addressed-input", action="store_true",
+        help="Experimental renderer messages for card/picker; native dialogs can take focus",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("diagnose")
@@ -53,6 +61,8 @@ def main():
         command.add_argument("--timeout", type=float, default=1200)
 
     args = parser.parse_args()
+    if (args.no_physical_input or args.addressed_input) and args.command == "firmware-probe":
+        parser.error("firmware-probe does not support input mode options.")
 
     if args.command in {"downgrade", "upgrade", "refresh", "offline-upgrade"} and not args.yes:
         parser.error("Firmware write requires --yes. No device action was performed.")
@@ -62,7 +72,10 @@ def main():
         elif args.command == "firmware-probe":
             firmware_probe_main(window_title=args.window_title)
         else:
-            with DJIAssistant.connect(title=args.window_title) as dji:
+            with DJIAssistant.connect(
+                title=args.window_title, allow_physical_input=not args.no_physical_input,
+                addressed_input=args.addressed_input,
+            ) as dji:
                 if args.command == "status":
                     console.print(dji.firmware.status())
                 elif args.command == "offline-select":

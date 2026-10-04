@@ -11,6 +11,8 @@ from ...exceptions import DJIAssistantNotRunning
 class UIASession:
     def __init__(self, title: str = WINDOW_TITLE):
         self.title = title
+        self.allow_physical_input = True
+        self.addressed_input = False
         self._window: UIAWrapper | None = None
         self._window_spec: WindowSpecification | None = None
 

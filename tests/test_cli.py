@@ -7,6 +7,13 @@ from dji_assistant.models import FirmwareVersion
 
 
 class CliTests(unittest.TestCase):
+    def test_no_physical_input_option_propagates_to_session(self):
+        with patch("sys.argv", ["dji-assistant", "--no-physical-input", "current"]), patch(
+            "dji_assistant.cli.DJIAssistant"
+        ) as assistant, patch("dji_assistant.cli.console"):
+            self.assertEqual(main(), 0)
+        self.assertFalse(assistant.connect.call_args.kwargs["allow_physical_input"])
+
     def test_missing_authorization_never_connects(self):
         for command in (
             ["refresh"], ["upgrade", "17.01.0516"],

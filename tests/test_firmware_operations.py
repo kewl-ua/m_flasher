@@ -480,6 +480,44 @@ class PackageTests(unittest.TestCase):
             desktop.return_value.windows.return_value = [dialog]
             self.assertEqual(offline._owned_file_dialogs(), [dialog])
 
+    def test_background_picker_invokes_without_focus_or_mouse(self):
+        session = Mock()
+        session.allow_physical_input = False
+        offline = OfflinePage(session)
+        package = Path("package.zip")
+        field = session.window_spec.child_window.return_value.wrapper_object.return_value
+        dialog = Mock()
+        with patch("dji_assistant.pages.offline.validate_package", return_value=package), patch.object(
+            offline, "open"
+        ), patch.object(offline, "selected_package", return_value=None), patch.object(
+            offline, "_owned_file_dialogs", return_value=[dialog]
+        ), patch.object(offline, "_submit_package", return_value=package):
+            self.assertEqual(offline.select_package(package), package)
+        field.invoke.assert_called_once_with()
+        field.click_input.assert_not_called()
+        session.window.set_focus.assert_not_called()
+
+    def test_addressed_picker_route_never_uses_physical_fallback(self):
+        session = Mock()
+        session.allow_physical_input = False
+        session.addressed_input = True
+        offline = OfflinePage(session)
+        package = Path("package.zip")
+        field = session.window_spec.child_window.return_value.wrapper_object.return_value
+        dialog = Mock()
+        with patch("dji_assistant.pages.offline.validate_package", return_value=package), patch.object(
+            offline, "open"
+        ), patch.object(offline, "selected_package", return_value=None), patch.object(
+            offline, "_owned_file_dialogs", return_value=[dialog]
+        ), patch.object(offline, "_submit_package", return_value=package), patch(
+            "dji_assistant.pages.offline.addressed_click"
+        ) as send:
+            self.assertEqual(offline.select_package(package), package)
+        send.assert_called_once_with(session.window, field)
+        field.click_input.assert_not_called()
+        field.invoke.assert_not_called()
+        session.window.set_focus.assert_not_called()
+
     def test_already_selected_package_never_clicks_field(self):
         offline = OfflinePage(Mock())
         path = Path(r"C:\firmware\package.zip")

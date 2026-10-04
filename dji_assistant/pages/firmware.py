@@ -124,7 +124,11 @@ class FirmwarePage(BasePage):
 
         try:
             obj.invoke()
-        except Exception:
+        except Exception as exc:
+            if not self.session.allow_physical_input:
+                raise UIElementNotFound(
+                    "Firmware navigation Invoke failed; physical input is disabled."
+                ) from exc
             obj.click_input()
 
         # Temporary synchronization for milestone 0.

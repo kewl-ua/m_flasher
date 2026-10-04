@@ -39,6 +39,66 @@ class StartupTests(unittest.TestCase):
             DJIAssistant.launch("DJI.exe")
         start.assert_not_called()
 
+    def test_connect_propagates_no_physical_input(self):
+        with patch("dji_assistant.client.UIASession") as factory:
+            DJIAssistant.connect(allow_physical_input=False)
+        self.assertFalse(factory.return_value.allow_physical_input)
+
+    def test_raw_card_uses_legacy_action_without_mouse_in_background_mode(self):
+        session = Mock()
+        session.allow_physical_input = False
+        card = control("Matrice 4T")
+        session.window.descendants.side_effect = [
+            [control("DJI ASSISTANT 2", "Image")],
+            [control("Matrice 4T", "Hyperlink"), control("Current")],
+        ]
+        client = DJIAssistant(session)
+        with patch.object(client, "_raw_device_cards", return_value=[card]), patch.object(
+            client, "_click_device_card"
+        ) as click, patch.object(client.firmware, "current", return_value="17.02.0501"), patch(
+            "dji_assistant.client.get_elem_interface"
+        ) as interface, patch("dji_assistant.client.time.sleep"):
+            interface.return_value.CurrentDefaultAction = "click"
+            client.open_device("Matrice 4T")
+        interface.return_value.DoDefaultAction.assert_called_once_with()
+        click.assert_not_called()
+        session.window.set_focus.assert_not_called()
+
+    def test_background_card_without_default_action_is_not_clicked(self):
+        session = Mock()
+        session.allow_physical_input = False
+        session.window.descendants.return_value = [control("DJI ASSISTANT 2", "Image")]
+        card = control("Matrice 4T")
+        client = DJIAssistant(session)
+        with patch.object(client, "_raw_device_cards", return_value=[card]), patch(
+            "dji_assistant.client.get_elem_interface"
+        ) as interface, patch.object(client, "_click_device_card") as click:
+            interface.return_value.CurrentDefaultAction = ""
+            with self.assertRaisesRegex(UnexpectedAssistantState, "no Legacy default action"):
+                client.open_device("Matrice 4T")
+        interface.return_value.DoDefaultAction.assert_not_called()
+        click.assert_not_called()
+
+    def test_addressed_card_route_never_uses_global_mouse(self):
+        session = Mock()
+        session.allow_physical_input = False
+        session.addressed_input = True
+        card = control("Matrice 4T")
+        session.window.descendants.side_effect = [
+            [control("DJI ASSISTANT 2", "Image")],
+            [control("Matrice 4T", "Hyperlink"), control("Current")],
+        ]
+        client = DJIAssistant(session)
+        with patch.object(client, "_raw_device_cards", return_value=[card]), patch(
+            "dji_assistant.client.addressed_click"
+        ) as send, patch.object(client, "_click_device_card") as click, patch.object(
+            client.firmware, "current", return_value="17.02.0501"
+        ), patch("dji_assistant.client.time.sleep"):
+            client.open_device("Matrice 4T")
+        send.assert_called_once_with(session.window, card)
+        click.assert_not_called()
+
+
     def test_card_invoked_once(self):
         session = Mock()
         card = control("Matrice 4T", "Hyperlink")

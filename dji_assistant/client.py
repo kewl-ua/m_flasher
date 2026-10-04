@@ -7,12 +7,13 @@ from pathlib import Path
 
 from pywinauto import Desktop
 from pywinauto.controls.uiawrapper import UIAWrapper
-from pywinauto.uia_defines import IUIA
+from pywinauto.uia_defines import IUIA, get_elem_interface
 from pywinauto.uia_element_info import UIAElementInfo
 import win32con
 import win32gui
 
 from .backend.uia.session import UIASession
+from .backend.uia.input import addressed_click
 from .constants import WINDOW_TITLE
 from .pages.firmware import FirmwarePage
 from .pages.offline import OfflinePage
@@ -26,16 +27,32 @@ class DJIAssistant:
         self.offline = OfflinePage(session)
 
     @classmethod
-    def connect(cls, title: str = WINDOW_TITLE) -> "DJIAssistant":
-        return cls(UIASession(title=title).connect())
+    def connect(
+        cls, title: str = WINDOW_TITLE, *, allow_physical_input: bool = True,
+        addressed_input: bool = False,
+    ) -> "DJIAssistant":
+        if not isinstance(allow_physical_input, bool):
+            raise ValueError("allow_physical_input must be a boolean.")
+        if not isinstance(addressed_input, bool):
+            raise ValueError("addressed_input must be a boolean.")
+        session = UIASession(title=title)
+        session.allow_physical_input = allow_physical_input
+        session.addressed_input = addressed_input
+        return cls(session.connect())
 
     @classmethod
     def launch(
         cls, executable: str | Path, *, title: str = WINDOW_TITLE,
         timeout: float = 30,
+        allow_physical_input: bool = True,
+        addressed_input: bool = False,
     ) -> "DJIAssistant":
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout must be finite and positive.")
+        if not isinstance(allow_physical_input, bool):
+            raise ValueError("allow_physical_input must be a boolean.")
+        if not isinstance(addressed_input, bool):
+            raise ValueError("addressed_input must be a boolean.")
         path = Path(executable).resolve(strict=True)
         if not path.is_file() or path.suffix.lower() != ".exe":
             raise ValueError("Expected installed DJI Assistant executable.")
@@ -51,7 +68,10 @@ class DJIAssistant:
             if len(windows) > 1:
                 raise UnexpectedAssistantState("Multiple Assistant windows appeared.")
             if windows and windows[0].is_visible() and windows[0].is_enabled():
-                return cls.connect(title=title)
+                return cls.connect(
+                    title=title, allow_physical_input=allow_physical_input,
+                    addressed_input=addressed_input,
+                )
             time.sleep(0.2)
         raise DJIAssistantNotRunning("Assistant launch timed out; application is not terminated.")
 
@@ -79,6 +99,8 @@ class DJIAssistant:
         return cards if "CONNECTED DEVICES" in names else []
 
     def _click_device_card(self, card: UIAWrapper) -> None:
+        if not self._session.allow_physical_input:
+            raise UnexpectedAssistantState("Physical device-card click is disabled.")
         window = self._session.window
         window.set_focus()
         bounds = card.rectangle()
@@ -145,7 +167,20 @@ class DJIAssistant:
                     raise UnexpectedAssistantState("Device card is not enabled and visible.")
                 invoked = True
                 if raw_card:
-                    self._click_device_card(target)
+                    if self._session.addressed_input is True:
+                        addressed_click(self._session.window, target)
+                    elif self._session.allow_physical_input:
+                        self._click_device_card(target)
+                    else:
+                        legacy = get_elem_interface(
+                            target.element_info.element, "LegacyIAccessible"
+                        )
+                        if not legacy.CurrentDefaultAction:
+                            raise UnexpectedAssistantState(
+                                "Device card has no Legacy default action. "
+                                "Physical input is disabled; open the card manually."
+                            )
+                        legacy.DoDefaultAction()
                 else:
                     target.invoke()
             time.sleep(0.2)

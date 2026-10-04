@@ -17,6 +17,7 @@ from .firmware import FirmwarePage
 from ._firmware_tree import _walk
 from ..exceptions import FirmwareOperationFailed, FirmwareOutcomeUnknown, UnexpectedAssistantState
 from ..models import FirmwareResult, FirmwareStatus, FirmwareVersion
+from ..backend.uia.input import addressed_click
 
 PACKAGE_FIELD = "Click here to select firmware zip package..."
 
@@ -107,17 +108,22 @@ class OfflinePage(BasePage):
         self.open()
         if self.selected_package() == package:
             return package
-        self.window.set_focus()
         field = self._field().wrapper_object()
-        rectangle = field.rectangle()
-        point = (int((rectangle.left + rectangle.right) / 2),
-                 int((rectangle.top + rectangle.bottom) / 2))
-        hit = win32gui.WindowFromPoint(point)
-        if win32gui.GetAncestor(hit, win32con.GA_ROOT) != self.window.handle:
-            raise UnexpectedAssistantState(
-                "File field is covered by another window. Uncover DJI Assistant and try selection again."
-            )
-        field.click_input()
+        if self.session.addressed_input is True:
+            addressed_click(self.window, field)
+        elif self.session.allow_physical_input:
+            self.window.set_focus()
+            rectangle = field.rectangle()
+            point = (int((rectangle.left + rectangle.right) / 2),
+                     int((rectangle.top + rectangle.bottom) / 2))
+            hit = win32gui.WindowFromPoint(point)
+            if win32gui.GetAncestor(hit, win32con.GA_ROOT) != self.window.handle:
+                raise UnexpectedAssistantState(
+                    "File field is covered by another window. Uncover DJI Assistant and try selection again."
+                )
+            field.click_input()
+        else:
+            field.invoke()
         deadline = time.monotonic() + timeout
         dialog = None
         while time.monotonic() < deadline:
@@ -130,7 +136,8 @@ class OfflinePage(BasePage):
             time.sleep(0.2)
         if dialog is None:
             raise UnexpectedAssistantState(
-                "Owned file dialog not found. Select the ZIP manually; do not press Start Upgrade."
+                "Owned file dialog not found; no physical-input retry was performed. "
+                "Select the ZIP manually; do not press Start Upgrade."
             )
         return self._submit_package(dialog, package, deadline)
 
