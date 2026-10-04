@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pywinauto import Desktop
+from pywinauto.application import WindowSpecification
+from pywinauto.controls.uiawrapper import UIAWrapper
 
 from ...constants import WINDOW_TITLE
 from ...exceptions import DJIAssistantNotRunning
@@ -9,10 +11,10 @@ from ...exceptions import DJIAssistantNotRunning
 class UIASession:
     def __init__(self, title: str = WINDOW_TITLE):
         self.title = title
-        self._window = None
-        self._window_spec = None
+        self._window: UIAWrapper | None = None
+        self._window_spec: WindowSpecification | None = None
 
-    def connect(self):
+    def connect(self) -> "UIASession":
         spec = Desktop(backend="uia").window(title=self.title)
 
         try:
@@ -27,7 +29,7 @@ class UIASession:
         return self
 
     @property
-    def window(self):
+    def window(self) -> UIAWrapper:
         if self._window is None:
             raise DJIAssistantNotRunning(
                 "UIA session is not connected. Call connect() first."
@@ -35,7 +37,7 @@ class UIASession:
         return self._window
 
     @property
-    def window_spec(self):
+    def window_spec(self) -> WindowSpecification:
         if self._window_spec is None:
             raise DJIAssistantNotRunning(
                 "UIA session is not connected. Call connect() first."

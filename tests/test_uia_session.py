@@ -10,7 +10,10 @@ from dji_assistant.pages.firmware import FirmwarePage
 
 class UIASessionTests(unittest.TestCase):
     def test_spec_and_wrapper_have_separate_roles(self):
-        wrapper = Mock(spec=["descendants"])
+        wrapper = Mock(spec=["descendants", "children", "element_info"])
+        wrapper.children.return_value = []
+        wrapper.element_info.control_type = "Window"
+        wrapper.element_info.name = ""
         spec = Mock()
         spec.wrapper_object.return_value = wrapper
         with patch("dji_assistant.backend.uia.session.Desktop") as desktop:
