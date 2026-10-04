@@ -39,6 +39,11 @@
 
 ### Маршрут к Linux updater
 
+[Справочник адресов DUML](./research/transport/usb-duml.md#справочник-адресов-duml)
+сводит type/index, публичные имена, наблюдаемые роли на M4T и связь с
+manifest/status prefixes. Header-адреса и payload prefixes разделены
+по уровню подтверждения; USB addresses описаны отдельно.
+
 Новое live-свидетельство, проверенное offline:
 [USB передача 23 файлов release 17.01.0516](./research/firmware/capture-transfer.md).
 Подтверждены file bytes/MD5 и направление команд; полный session/apply

@@ -6,6 +6,121 @@
 
 Материалы ниже сохраняют ход исследования. Последующие записи могут уточнять ранние гипотезы; ограничения приведены рядом с результатами.
 
+## Справочник адресов DUML
+
+Сводка на 2026-10-04. Это логические адреса sender/receiver внутри DUML,
+не USB device addresses, не endpoint numbers и не command IDs.
+Таблицы объединяют наблюдения двух firmware captures, отдельного запроса
+версии и ограниченных battery queries. Это не список разрешенных запросов.
+
+### Как устроен адрес
+
+В DUML v1 byte 4 от начала пакета — sender, byte 5 — receiver
+(offsets zero-based). По [публичному dissector][duml-proto]:
+
+```text
+type    = address & 0x1F
+index   = address >> 5
+address = type | (index << 5)
+```
+
+Type занимает младшие 5 bits, index — старшие 3 bits.
+Адрес и type в таблицах ниже записаны в **hex**, index — в decimal.
+Публичные имена взяты из `DJI_DUMLv1_SRC_DEST_TEXT` на revision
+`195692263c2684cf1ddc4995f2736be6c0fb135e`; маски подтверждены
+полями `sender`/`sender_idx` и `receiver`/`receiver_idx` того же источника.
+Эти исторические имена не являются современной аппаратной картой M4T.
+
+Например, `2A = 0A | (1 << 5)` — type PC, index 1;
+`48 = 08 | (2 << 5)` — type 08, index 2.
+`28`, `48` и `68` имеют один type 08, но разные indices 1/2/3.
+Совпадение type не означает одинаковую роль или взаимозаменяемость адресов.
+
+### Адреса, наблюдавшиеся в DUML header
+
+Уровни доказательства: **wire** — адрес присутствует в разобранных пакетах;
+**public** — только имя типа из community dissector. Наблюдаемая роль
+описывает конкретный обмен, не универсальный API и не физическую плату.
+
+| Адрес | Type | Index | Публичное имя типа | Наблюдаемая роль на M4T / граница подтверждения |
+|---|---|---:|---|---|
+| `2A` | `0A` | 1 | PC | **Wire:** сторона ПК / Assistant; отправляет firmware `00/2A`, отвечает на входящие `81/82`; также sender самостоятельных version/battery queries |
+| `48` | `08` | 2 | DM36x transcoder air side | **Wire:** получает 23 файла; инициирует `81/82`, присылает `42`, отвечает на `83/84/85/4F/41`. Связь с физическим компонентом и `WA345T_E2` / upgrade-center не доказана |
+| `28` | `08` | 1 | DM36x transcoder air side | **Wire:** источник ответов `00/01` на запросы к `00`; адресат `00/51` и `00/4A` после reconnect. Не следует подменять им `48` |
+| `68` | `08` | 3 | DM36x transcoder air side | **Wire:** адресат `00/51` после reconnect; назначение instance 3 не установлено |
+| `1F` | `1F` | 0 | Last | **Wire:** адресат version inquiry `00/01`, включая самостоятельную проверку. `Last` — имя enum, не подтвержденное название модуля; layout/значение версии меняются между наблюдениями |
+| `00` | `00` | 0 | Invalid/Any | **Wire:** destination для `2A -> 00`, `00/01`, и `0A -> 00`, `00/0C`. Не доказано, что любая команда сюда broadcast или безопасна |
+| `0A` | `0A` | 0 | PC | **Wire:** sender `00/0C` к `00`. Конкретный процесс/агент за PC index 0 не установлен; не смешивать с `2A` |
+| `03` | `03` | 0 | Flight Controller | **Wire:** sender наблюдаемого `03/43` к `0A`; также отвечает на `00/01`. Полный telemetry decoder не проверен |
+| `04` | `04` | 0 | Gimbal | **Wire:** sender `04/05` к `2A` и `00/F1` к `2A`/`8A`; payload здесь не декодирован |
+| `0B` | `0B` | 0 | Battery | **Wire:** отвечает на ограниченные `0D/02` queries; есть сопоставление SOC, но не универсальный battery decoder |
+| `8A` | `0A` | 4 | PC | **Wire:** destination `00/F1` от `04`; назначение PC index 4 не установлено |
+| `92` | `12` | 4 | Binocular | **Wire:** sender `03/CE` к `2A`; конкретный sensor/consumer не установлен |
+
+Основания: [прямой запрос версии](#первый-самостоятельный-usb-запрос-версии),
+[battery queries](../telemetry/battery.md),
+[первый firmware capture](../firmware/capture-transfer.md),
+[Offline Upgrade и сравнение](../firmware/capture-offline-upgrade.md).
+Ни одна строка не доказывает наличие DM36x, Ambarella или другого
+исторически названного чипа в M4T.
+
+### Адресные значения из XML и расширенных статусов
+
+Это **отдельный уровень доказательства**: prefixes восьмибайтовых блоков
+payload `00/42`, а не sender/receiver каждого компонента в DUML header.
+В двух captures набор 17 prefixes совпал с уникальными `com_prama1`
+из [manifest](../firmware/package-manifest.md#4-все-22-firmware-records)
+после упаковки старшего byte как type, младшего как index.
+Совпадение проверено для всех длинных статусов; полная семантика блоков
+и фактический выбор аппаратного варианта еще не установлены.
+
+| Адресный prefix | Type | Index | Публичное имя типа | `com_prama1` | Имя в M4T manifest / уровень подтверждения |
+|---|---|---:|---|---|---|
+| `0C` | `0C` | 0 | ESC | `0x0c00` | XML + status: ESC0, варианты mc01/mc02 |
+| `4C` | `0C` | 2 | ESC | `0x0c02` | XML + status: ESC1, варианты mc01/mc02 |
+| `28` | `08` | 1 | DM36x transcoder air side | `0x0801` | XML + status: WA345T_E2; module id **0802**, не 0801 |
+| `4F` | `0F` | 2 | Serial-to-parallel (USB ctrl.) air side | `0x0f02` | XML + status: WA345T_V1 |
+| `0B` | `0B` | 0 | Battery | `0x0b00` | XML + status: Battery, три hardware variants |
+| `A1` | `01` | 5 | Camera (Ambarella) | `0x0105` | XML + status: LCPU |
+| `D9` | `19` | 6 | IMU | `0x1906` | XML + status: RTK_Mobile; публичное IMU не заменяет имя manifest |
+| `C1` | `01` | 6 | Camera (Ambarella) | `0x0106` | XML + status: Laser |
+| `AA` | `0A` | 5 | PC | `0x0a05` | XML + status: SEARCHLIGHT; публичное PC не доказывает роль host |
+| `61` | `01` | 3 | Camera (Ambarella) | `0x0103` | XML + status: IR_Sensor, IA640/HK |
+| `CA` | `0A` | 6 | PC | `0x0a06` | XML + status: SPEAKER_MCU |
+| `25` | `05` | 1 | Center Board | `0x0501` | XML + status: CORE_MCU |
+| `B3` | `13` | 5 | HD transmission FPGA air side | `0x1305` | XML + status: LIDAR |
+| `18` | `18` | 0 | RC battery | `0x1800` | XML + status: RADAR_FRONT |
+| `38` | `18` | 1 | RC battery | `0x1801` | XML + status: RADAR_LEFT |
+| `58` | `18` | 2 | RC battery | `0x1802` | XML + status: RADAR_RIGHT |
+| `78` | `18` | 3 | RC battery | `0x1803` | XML + status: RADAR_UP |
+
+Особые prefixes: первый блок начинается `00 01`, его нельзя без decoder
+объявлять модулем с адресом `00` или `01`. После первого offline reconnect
+появляется дополнительный блок `48 00`: это наблюдаемый prefix, но его
+роль не доказана одним совпадением с receiver firmware transfer.
+Детали: [расширенные статусы](../firmware/capture-offline-upgrade.md#0042-подтвержденная-структура-и-границы-интерпретации).
+
+Итого: 22 firmware records дают 17 уникальных `com_prama1`, а не 22
+независимых wire-адреса. Варианты разделяют routing value.
+`module id`, `com_prama1` и packed DUML address нельзя механически
+считать одним идентификатором; пример E2: `0802` / `0x0801` / `28`.
+
+### Не путать уровни адресации
+
+| Пример | Что означает |
+|---|---|
+| `2A -> 48` | Sender/receiver в DUML header, hex |
+| `00/2A` | Command set 00 / command id 2A; совпадение с адресом ПК случайно |
+| `00/4F` и prefix `4F` | Команда и адресное значение из status/manifest — разные поля |
+| USB address 54, 56, 58 | Исторические device addresses в capture, decimal; меняются при reconnect |
+| OUT `04` / IN `85` | USB endpoint addresses, hex; не DUML Gimbal `04` и не команда `00/85` |
+| MI04 / interface 4 | USB interface; не sender, не endpoint и не command id |
+
+В частности, USB address 58 decimal не равен DUML prefix `58` hex.
+Нельзя строить новые запросы простым перебором таблицы: поддержка команды,
+payload, актуальная привязка устройства и разрешение на live-операцию
+должны проверяться отдельно.
+
 ## DUML: карта подтверждения
 
 Сводка на 2026-10-04. Номера ниже записаны в hex как

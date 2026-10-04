@@ -87,6 +87,10 @@ pip install -e .
 
 ### Исследования
 
+Быстрый справочник: [адреса DUML — type/index, публичные имена и роли на M4T](./docs/research/transport/usb-duml.md#справочник-адресов-duml).
+В нем отдельно разобраны `2A` (ПК), `48` (принимающая firmware сторона),
+адресные prefixes из XML/статусов и отличие от USB addresses.
+
 | Тема | Содержание |
 |---|---|
 | [USB и DUML: транспорт и запрос версии](./docs/research/transport/usb-duml.md) | На M4T проверен единичный запрос версии через USB. Это исследовательский пробник, не готовый backend SDK; драйверы и configuration не менялись. |
