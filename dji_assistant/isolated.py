@@ -22,6 +22,7 @@ from .exceptions import UnexpectedAssistantState
 from .models import FirmwareStage, FirmwareStatus, FirmwareVersion
 
 _LIMIT = 65536
+_DESKTOP_NAME = "DjiSdk_IsolatedAssistant"
 _USER32 = ctypes.WinDLL("user32", use_last_error=True)
 _USER32.CreateDesktopW.argtypes = [
     wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.c_void_p,
@@ -126,7 +127,7 @@ class IsolatedAssistant:
         path = Path(executable).resolve(strict=True)
         if not path.is_file() or path.suffix.lower() != ".exe":
             raise ValueError("Expected installed DJI Assistant executable.")
-        name = "DjiSdk_" + secrets.token_hex(8)
+        name = _DESKTOP_NAME
         desktop = _USER32.CreateDesktopW(name, None, None, 0, 0x01FF, None)
         if not desktop:
             raise ctypes.WinError(ctypes.get_last_error())

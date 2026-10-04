@@ -5,7 +5,9 @@ import unittest
 from unittest.mock import Mock, patch
 
 from dji_assistant import IsolatedAssistant
-from dji_assistant._isolated_worker import _dispatch, _initialize, _IsolatedOfflinePage
+from dji_assistant._isolated_worker import (
+    _dispatch, _initialize, _IsolatedOfflinePage, _assert_reusable_desktop,
+)
 from dji_assistant.exceptions import UnexpectedAssistantState
 from dji_assistant.isolated import _receive, _send
 from dji_assistant.models import FirmwareStage, FirmwareStatus, FirmwareVersion
@@ -49,6 +51,19 @@ class ProtocolTests(unittest.TestCase):
 class ControllerTests(unittest.TestCase):
     def controller(self):
         return IsolatedAssistant(123, "DjiSdk_abc", Mock(), Mock())
+
+    def test_launch_reuses_same_desktop_name(self):
+        with patch("dji_assistant.isolated.Path") as path, patch(
+            "dji_assistant.isolated._USER32",
+        ) as user32, patch.object(IsolatedAssistant, "_start") as start:
+            path.return_value.resolve.return_value.suffix = ".exe"
+            IsolatedAssistant.launch("DJI.exe")
+            IsolatedAssistant.launch("DJI.exe")
+        self.assertEqual(
+            [call.args[0] for call in user32.CreateDesktopW.call_args_list],
+            ["DjiSdk_IsolatedAssistant", "DjiSdk_IsolatedAssistant"],
+        )
+        self.assertEqual(start.call_count, 2)
 
     def test_wrong_handshake_token_releases_resources_without_initialization(self):
         process, thread, connection = Mock(), Mock(), Mock()
@@ -164,6 +179,49 @@ class ControllerTests(unittest.TestCase):
 
 
 class WorkerTests(unittest.TestCase):
+    def test_reuse_reports_window_lookup_failure_outside_native_callback(self):
+        import win32process
+
+        error = win32process.error(5, "GetWindowThreadProcessId", "denied")
+        with patch("dji_assistant._isolated_worker._USER32") as user32, patch(
+            "dji_assistant._isolated_worker._desktop_name", return_value="DjiSdk_IsolatedAssistant",
+        ), patch(
+            "dji_assistant._isolated_worker.win32process.GetWindowThreadProcessId",
+            side_effect=error,
+        ):
+            user32.EnumDesktopWindows.side_effect = lambda desktop, callback, data: callback(42, data)
+            with self.assertRaisesRegex(UnexpectedAssistantState, "Could not verify") as raised:
+                _assert_reusable_desktop("DjiSdk_IsolatedAssistant")
+        self.assertIs(raised.exception.__cause__, error)
+
+    def test_reuse_checks_foreign_windows_before_spawning(self):
+        with patch("dji_assistant._isolated_worker._dji_processes", return_value=[]), patch(
+            "dji_assistant._isolated_worker._assert_reusable_desktop",
+            side_effect=UnexpectedAssistantState("other processes"),
+        ), patch("dji_assistant._isolated_worker._spawn") as spawn:
+            with self.assertRaisesRegex(UnexpectedAssistantState, "other processes"):
+                _initialize("DjiSdk_IsolatedAssistant", "Assistant", "DJI.exe", 1)
+        spawn.assert_not_called()
+
+    def test_reuse_rejects_foreign_hidden_window(self):
+        with patch("dji_assistant._isolated_worker._USER32") as user32, patch(
+            "dji_assistant._isolated_worker._desktop_name", return_value="DjiSdk_IsolatedAssistant",
+        ), patch(
+            "dji_assistant._isolated_worker.win32process.GetWindowThreadProcessId",
+            return_value=(1, 987654),
+        ), patch("dji_assistant._isolated_worker.os.getpid", return_value=123):
+            user32.EnumDesktopWindows.side_effect = lambda desktop, callback, data: callback(42, data)
+            with self.assertRaisesRegex(UnexpectedAssistantState, "other processes"):
+                _assert_reusable_desktop("DjiSdk_IsolatedAssistant")
+
+    def test_reuse_rejects_wrong_worker_desktop(self):
+        with patch("dji_assistant._isolated_worker._USER32") as user32, patch(
+            "dji_assistant._isolated_worker._desktop_name", return_value="Default",
+        ):
+            with self.assertRaisesRegex(UnexpectedAssistantState, "not on"):
+                _assert_reusable_desktop("DjiSdk_IsolatedAssistant")
+        user32.EnumDesktopWindows.assert_not_called()
+
     def test_flysafe_dismissal_requires_idle(self):
         dji = Mock()
         dji.firmware.status.return_value = FirmwareStatus(FirmwareStage.UPDATING)

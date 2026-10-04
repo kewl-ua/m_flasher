@@ -8,11 +8,13 @@ import time
 from ctypes import wintypes
 
 import win32event
+import win32api
+import win32process
 from pywinauto import Desktop
 
 from .client import DJIAssistant
 from .exceptions import UnexpectedAssistantState
-from .isolated import _receive, _send, _spawn, _window_desktop
+from .isolated import _receive, _send, _spawn, _window_desktop, _USER32, _desktop_name
 from .models import FirmwareStage
 from .pages.offline import OfflinePage
 
@@ -22,6 +24,45 @@ class _IsolatedOfflinePage(OfflinePage):
         if _window_desktop(dialog.handle) != _window_desktop(self.window.handle):
             raise UnexpectedAssistantState("File picker escaped isolated desktop.")
         return super()._submit_package(dialog, package, deadline)
+
+
+def _assert_reusable_desktop(name: str) -> None:
+    desktop = _USER32.GetThreadDesktop(win32api.GetCurrentThreadId())
+    if not desktop:
+        raise ctypes.WinError(ctypes.get_last_error())
+    if _desktop_name(desktop) != name:
+        raise UnexpectedAssistantState("Worker is not on the requested desktop.")
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    _USER32.EnumDesktopWindows.argtypes = [wintypes.HANDLE, callback_type, wintypes.LPARAM]
+    _USER32.EnumDesktopWindows.restype = wintypes.BOOL
+    foreign_pids = set()
+    lookup_errors = []
+
+    @callback_type
+    def collect(hwnd, _):
+        try:
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        except win32process.error as exc:
+            lookup_errors.append(exc)
+            return False
+        if pid != os.getpid():
+            foreign_pids.add(pid)
+        return True
+
+    ctypes.set_last_error(0)
+    ok = _USER32.EnumDesktopWindows(desktop, collect, 0)
+    error = ctypes.get_last_error()
+    if lookup_errors:
+        raise UnexpectedAssistantState(
+            "Could not verify ownership of reusable desktop windows; not launching."
+        ) from lookup_errors[0]
+    if not ok and error:
+        raise ctypes.WinError(error)
+    if foreign_pids:
+        raise UnexpectedAssistantState(
+            f"Reusable desktop contains windows from other processes "
+            f"({sorted(foreign_pids)}); inspect it through attach, not launch."
+        )
 
 
 def _dji_processes() -> list[int]:
@@ -71,6 +112,7 @@ def _initialize(desktop: str, title: str, executable: str | None, timeout: float
             raise UnexpectedAssistantState(
                 f"DJI processes already running ({existing}); close them normally first."
             )
+        _assert_reusable_desktop(desktop)
         process, thread, _, _ = _spawn(executable, [], desktop)
         process.Close()
         thread.Close()
